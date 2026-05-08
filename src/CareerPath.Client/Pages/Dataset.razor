@@ -9,26 +9,41 @@
 
 @if (summary != null)
 {
-    <MudChip T="string" Color="Color.Primary" Size="Size.Medium" Class="mb-4">
-        Total Records: @summary.TotalRecords
-    </MudChip>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <MudChip T="string" Color="Color.Primary" Size="Size.Medium">
+            Total Records: @summary.TotalRecords
+        </MudChip>
+        @if (summary.ByCareerOutcome != null && summary.ByCareerOutcome.TryGetValue("ICT-Aligned", out var ictAligned))
+        {
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium">
+                ICT-Aligned: @ictAligned
+            </MudChip>
+        }
+        @if (summary.ByCareerOutcome != null && summary.ByCareerOutcome.TryGetValue("Non-ICT-Aligned", out var nonIct))
+        {
+            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Medium">
+                Non-ICT-Aligned: @nonIct
+            </MudChip>
+        }
+    </div>
 }
 
 <MudCard Elevation="2" Class="mb-4">
     <MudCardContent>
         <MudGrid Spacing="3">
             <MudItem xs="12" md="4">
-                <MudSelect T="string" @bind-Value="selectedCourse" Label="Filter by Course" Variant="Variant.Outlined"
+                <MudSelect T="string" @bind-Value="selectedHonors" Label="Filter by Honors" Variant="Variant.Outlined"
                            Clearable="true" AnchorOrigin="Origin.BottomCenter">
-                    <MudSelectItem Value="@("")">All Courses</MudSelectItem>
-                    <MudSelectItem Value="@("BSIT")">BSIT</MudSelectItem>
-                    <MudSelectItem Value="@("BSCS")">BSCS</MudSelectItem>
-                    <MudSelectItem Value="@("BSIS")">BSIS</MudSelectItem>
+                    <MudSelectItem Value="@("")">All Honors</MudSelectItem>
+                    <MudSelectItem Value="@("No Honors")">No Honors</MudSelectItem>
+                    <MudSelectItem Value="@("Cum Laude")">Cum Laude</MudSelectItem>
+                    <MudSelectItem Value="@("Magna Cum Laude")">Magna Cum Laude</MudSelectItem>
+                    <MudSelectItem Value="@("Summa Cum Laude")">Summa Cum Laude</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudTextField T="string" @bind-Value="searchText" Label="Search" Variant="Variant.Outlined"
-                              Placeholder="Search by name, job, industry..." Immediate="true"
+                              Placeholder="Search by job title, industry, competencies..." Immediate="true"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
             </MudItem>
             <MudItem xs="12" md="2" Class="d-flex align-end">
@@ -48,20 +63,33 @@
 {
     <MudTable Items="@records.Items" Hover="true" Striped="true" Bordered="true" Elevation="2" Dense="true">
         <HeaderContent>
-            <MudTh>Name</MudTh>
             <MudTh>Year</MudTh>
-            <MudTh>Course</MudTh>
             <MudTh>GWA</MudTh>
-            <MudTh>Job Position</MudTh>
+            <MudTh>Honors</MudTh>
+            <MudTh>Career Clarity</MudTh>
+            <MudTh>RIASEC</MudTh>
+            <MudTh>Interest</MudTh>
+            <MudTh>Job Title</MudTh>
             <MudTh>Field of Industry</MudTh>
             <MudTh>Career Outcome</MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd>@context.Name</MudTd>
             <MudTd>@context.YearGraduated</MudTd>
-            <MudTd><MudChip T="string" Size="Size.Small" Color="Color.Default">@context.Course</MudChip></MudTd>
-            <MudTd>@context.Gwa.ToString("F4")</MudTd>
-            <MudTd>@context.JobPosition</MudTd>
+            <MudTd>@context.Gwa</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@GetHonorsColor(context.Honors)">
+                    @context.Honors
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                         Color="@GetClarityColor(context.CareerClarity)">
+                    @context.CareerClarity
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.RiasecDominant</MudTd>
+            <MudTd><strong>@context.Interest</strong></MudTd>
+            <MudTd>@context.JobTitle</MudTd>
             <MudTd>@context.FieldOfIndustry</MudTd>
             <MudTd>
                 <MudChip T="string" Size="Size.Small"
@@ -82,13 +110,17 @@
     </MudTable>
 }
 
+<style>
+    .gap-2 { gap: 8px; }
+</style>
+
 @code {
     private DatasetSummary? summary;
     private PagedResult<AlumniRecord>? records;
     private bool isLoading = true;
     private int currentPage = 1;
     private int pageSize = 50;
-    private string selectedCourse = "";
+    private string selectedHonors = "";
     private string searchText = "";
     private int totalPages => records == null ? 1 : Math.Max(1, (int)Math.Ceiling((double)records.Total / pageSize));
 
@@ -115,9 +147,25 @@
     {
         isLoading = true;
         var url = $"api/dataset?page={currentPage}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(selectedCourse)) url += $"&course={selectedCourse}";
+        if (!string.IsNullOrEmpty(selectedHonors)) url += $"&honors={Uri.EscapeDataString(selectedHonors)}";
         if (!string.IsNullOrEmpty(searchText)) url += $"&search={Uri.EscapeDataString(searchText)}";
         records = await Http.GetFromJsonAsync<PagedResult<AlumniRecord>>(url);
         isLoading = false;
     }
+
+    private static Color GetHonorsColor(string honors) => honors switch
+    {
+        "Summa Cum Laude" => Color.Warning,
+        "Magna Cum Laude" => Color.Secondary,
+        "Cum Laude" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static Color GetClarityColor(string clarity) => clarity switch
+    {
+        "High" => Color.Success,
+        "Medium" => Color.Warning,
+        "Low" => Color.Error,
+        _ => Color.Default
+    };
 }

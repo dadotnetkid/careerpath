@@ -21,10 +21,10 @@ public class DatasetController : ControllerBase
     public ActionResult<PagedResult<AlumniRecord>> GetRecords(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
-        [FromQuery] string? course = null,
+        [FromQuery] string? honors = null,
         [FromQuery] string? search = null)
     {
-        var result = _datasetService.GetRecords(page, pageSize, course, search);
+        var result = _datasetService.GetRecords(page, pageSize, honors, search);
         return Ok(result);
     }
 

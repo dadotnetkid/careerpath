@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using CareerPath.Server.Data;
 using CareerPath.Server.Services;
 using CareerPath.Shared;
@@ -28,17 +28,17 @@ public class PredictController : ControllerBase
 
         var result = _predictionService.Predict(input);
 
-        // Find similar alumni jobs
-        result.SimilarAlumniJobs = _datasetService.FindSimilarAlumniJobs(
-            input.Course, input.Gwa, input.Competencies, input.Interest, result.PredictedOutcome);
+        // Find similar alumni jobs using the new signature (Honors / Gwa / Interest similarity)
+        result.SimilarAlumniJobs = _datasetService.FindSimilarAlumniJobs(input, result.PredictedOutcome);
 
-        // Log the prediction
+        // Log the prediction (new schema — no Course, Gwa is string)
         _db.PredictionLogs.Add(new PredictionLog
         {
-            Course = input.Course,
             YearGraduated = input.YearGraduated,
             Gwa = input.Gwa,
+            Honors = input.Honors,
             Competencies = input.Competencies,
+            CareerClarity = input.CareerClarity,
             Interest = input.Interest,
             PredictedOutcome = result.PredictedOutcome,
             Confidence = result.Confidence,

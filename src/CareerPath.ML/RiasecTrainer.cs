@@ -1,4 +1,4 @@
-using Microsoft.ML;
+﻿using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Trainers;
 using CareerPath.Shared;
@@ -7,10 +7,28 @@ using System.Text.Json;
 
 namespace CareerPath.ML;
 
+/// <summary>
+/// Multiclass classifier predicting the dominant RIASEC dimension (R/I/A/S/E/C)
+/// from profile features. Reads `RiasecDominant` (full dimension name) from
+/// alumni_gts3.csv and maps it to a single uppercase letter.
+///
+/// Profile features used (no Interest — that would leak the answer since
+/// Interest is the dominant letter triplet):
+///   YearGraduated, Gwa, Honors, Competencies, CareerClarity.
+/// </summary>
 public class RiasecTrainer
 {
     private readonly MLContext _mlContext;
-    private static readonly HashSet<char> ValidRiasec = new() { 'R', 'I', 'A', 'S', 'E', 'C' };
+
+    private static readonly Dictionary<string, string> DimensionToLetter = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Realistic", "R" },
+        { "Investigative", "I" },
+        { "Artistic", "A" },
+        { "Social", "S" },
+        { "Enterprising", "E" },
+        { "Conventional", "C" }
+    };
 
     public RiasecTrainer()
     {
@@ -18,8 +36,8 @@ public class RiasecTrainer
     }
 
     /// <summary>
-    /// Load alumni CSV, extract dominant RIASEC letter as multiclass label,
-    /// and use profile features (NOT the Interest/RIASEC code column).
+    /// Reads alumni_gts3.csv with CsvHelper and produces RiasecFeatures rows.
+    /// Skips rows where RiasecDominant doesn't map to a valid R/I/A/S/E/C letter.
     /// </summary>
     public List<RiasecFeatures> LoadData(string csvPath)
     {
@@ -38,35 +56,20 @@ public class RiasecTrainer
 
         while (csv.Read())
         {
-            var interest = csv.GetField("Interest") ?? "";
+            var dimension = (csv.GetField("RiasecDominant") ?? "").Trim();
+            if (string.IsNullOrEmpty(dimension)) continue;
+            if (!DimensionToLetter.TryGetValue(dimension, out var label)) continue;
 
-            // Extract dominant RIASEC letter (first valid letter)
-            if (interest.Length < 1) continue;
-            var dominant = char.ToUpper(interest[0]);
-            if (!ValidRiasec.Contains(dominant)) continue;
-
-            // Map to full dimension name for readable labels
-            var label = dominant switch
-            {
-                'R' => "Realistic",
-                'I' => "Investigative",
-                'A' => "Artistic",
-                'S' => "Social",
-                'E' => "Enterprising",
-                'C' => "Conventional",
-                _ => ""
-            };
-            if (string.IsNullOrEmpty(label)) continue;
+            float year = 0f;
+            float.TryParse(csv.GetField("YearGraduated") ?? "", NumberStyles.Float, CultureInfo.InvariantCulture, out year);
 
             rows.Add(new RiasecFeatures
             {
-                Gwa = csv.GetField<float>("Gwa"),
-                YearGraduated = csv.GetField<float>("YearGraduated"),
-                Course = csv.GetField("Course") ?? "",
+                YearGraduated = year,
+                Gwa = csv.GetField("Gwa") ?? "",
+                Honors = csv.GetField("Honors") ?? "",
                 Competencies = csv.GetField("Competencies") ?? "",
-                CareerAlignment = csv.GetField("CareerAlignment") ?? "",
-                FieldOfIndustry = csv.GetField("FieldOfIndustry") ?? "",
-                EmploymentStatus = csv.GetField("EmploymentStatus") ?? "",
+                CareerClarity = csv.GetField("CareerClarity") ?? "",
                 Label = label
             });
         }
@@ -74,13 +77,12 @@ public class RiasecTrainer
         return rows;
     }
 
-    public RiasecModelMetrics TrainAndEvaluate(string csvPath, string modelOutputPath, int kFolds = 20)
+    public RiasecModelMetrics TrainAndEvaluate(string csvPath, string modelOutputPath)
     {
         var rawRows = LoadData(csvPath);
         Console.WriteLine($"\nRIASEC Multiclass Training");
         Console.WriteLine($"Total valid records: {rawRows.Count}");
 
-        // Show label distribution
         var dist = rawRows.GroupBy(r => r.Label).OrderByDescending(g => g.Count());
         Console.WriteLine("Label distribution:");
         foreach (var g in dist)
@@ -88,134 +90,124 @@ public class RiasecTrainer
 
         var data = _mlContext.Data.LoadFromEnumerable(rawRows);
 
-        // Build feature pipeline (NO Interest column — that's the label source)
-        var pipeline = _mlContext.Transforms.Conversion.MapValueToKey("Label")
-            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("CourseEncoded", "Course"))
-            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("AlignmentEncoded", "CareerAlignment"))
-            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("StatusEncoded", "EmploymentStatus"))
+        // 80/20 split with seed=42 for reproducibility
+        var split = _mlContext.Data.TrainTestSplit(data, testFraction: 0.2, seed: 42);
+        var trainData = split.TrainSet;
+        var testData = split.TestSet;
+
+        var trainCount = rawRows.Count - (int)testData.GetColumn<string>("Label").Count();
+        var testCount = (int)testData.GetColumn<string>("Label").Count();
+
+        // Feature pipeline: one-hot Gwa/Honors/CareerClarity, TF-IDF Competencies,
+        // concatenate with YearGraduated, normalize.
+        var featurePipeline = _mlContext.Transforms.Conversion.MapValueToKey("Label")
+            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("GwaEncoded", "Gwa"))
+            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("HonorsEncoded", "Honors"))
+            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("CareerClarityEncoded", "CareerClarity"))
             .Append(_mlContext.Transforms.Text.FeaturizeText("CompetenciesFeaturized", "Competencies"))
-            .Append(_mlContext.Transforms.Text.FeaturizeText("IndustryFeaturized", "FieldOfIndustry"))
             .Append(_mlContext.Transforms.Concatenate("Features",
-                "Gwa", "YearGraduated",
-                "CourseEncoded", "AlignmentEncoded", "StatusEncoded",
-                "CompetenciesFeaturized", "IndustryFeaturized"))
+                "YearGraduated",
+                "GwaEncoded",
+                "HonorsEncoded",
+                "CareerClarityEncoded",
+                "CompetenciesFeaturized"))
             .Append(_mlContext.Transforms.NormalizeMinMax("Features"));
 
-        // ── SVM (One-vs-All with Linear SVM) ──
-        Console.WriteLine("\n--- Training SVM (LinearSvm One-vs-All) ---");
-        var svmTrainer = _mlContext.MulticlassClassification.Trainers.OneVersusAll(
-            _mlContext.BinaryClassification.Trainers.LinearSvm(labelColumnName: "Label", featureColumnName: "Features"),
-            labelColumnName: "Label")
-            .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
-        var svmPipeline = pipeline.Append(svmTrainer);
-        var svmCv = _mlContext.MulticlassClassification.CrossValidate(data, svmPipeline, numberOfFolds: kFolds, labelColumnName: "Label");
-        var svmMetrics = AggregateCvMetrics(svmCv, "SVM (Linear, One-vs-All)", kFolds, rawRows.Count);
-
-        // ── Random Forest (One-vs-All with FastForest) ──
-        Console.WriteLine("\n--- Training Random Forest (FastForest One-vs-All) ---");
-        var rfTrainer = _mlContext.MulticlassClassification.Trainers.OneVersusAll(
-            _mlContext.BinaryClassification.Trainers.FastForest(labelColumnName: "Label", featureColumnName: "Features",
-                numberOfTrees: 100, numberOfLeaves: 20),
-            labelColumnName: "Label")
-            .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
-        var rfPipeline = pipeline.Append(rfTrainer);
-        var rfCv = _mlContext.MulticlassClassification.CrossValidate(data, rfPipeline, numberOfFolds: kFolds, labelColumnName: "Label");
-        var rfMetrics = AggregateCvMetrics(rfCv, "Random Forest (One-vs-All)", kFolds, rawRows.Count);
-
-        // ── SDCA (Stochastic Dual Coordinate Ascent) ──
+        // ── SDCA Maximum Entropy (default) ──
         Console.WriteLine("\n--- Training SDCA Maximum Entropy ---");
         var sdcaTrainer = _mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy(
-            labelColumnName: "Label", featureColumnName: "Features")
+                labelColumnName: "Label", featureColumnName: "Features")
             .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
-        var sdcaPipeline = pipeline.Append(sdcaTrainer);
-        var sdcaCv = _mlContext.MulticlassClassification.CrossValidate(data, sdcaPipeline, numberOfFolds: kFolds, labelColumnName: "Label");
-        var sdcaMetrics = AggregateCvMetrics(sdcaCv, "SDCA Maximum Entropy", kFolds, rawRows.Count);
+        var sdcaPipeline = featurePipeline.Append(sdcaTrainer);
+        var sdcaModel = sdcaPipeline.Fit(trainData);
+        var sdcaMetrics = EvaluateMulticlass(sdcaModel, testData, trainCount, testCount, "SDCA Maximum Entropy");
 
-        // Pick the best model and save it
-        var bestResult = new[] { ("SVM", svmMetrics, svmCv), ("RF", rfMetrics, rfCv), ("SDCA", sdcaMetrics, sdcaCv) }
-            .OrderByDescending(x => x.Item2.MacroAccuracy)
-            .First();
+        // ── LBFGS Maximum Entropy (alternative) ──
+        Console.WriteLine("\n--- Training LBFGS Maximum Entropy ---");
+        var lbfgsTrainer = _mlContext.MulticlassClassification.Trainers.LbfgsMaximumEntropy(
+                labelColumnName: "Label", featureColumnName: "Features")
+            .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
+        var lbfgsPipeline = featurePipeline.Append(lbfgsTrainer);
+        var lbfgsModel = lbfgsPipeline.Fit(trainData);
+        var lbfgsMetrics = EvaluateMulticlass(lbfgsModel, testData, trainCount, testCount, "LBFGS Maximum Entropy");
 
-        Console.WriteLine($"\nBest model: {bestResult.Item2.AlgorithmName} (Macro Accuracy: {bestResult.Item2.MacroAccuracy:P2})");
-
-        // Train best model on full dataset and save
+        // Pick the better model. Default to SDCA on a tie.
         ITransformer bestModel;
-        if (bestResult.Item1 == "SVM")
-            bestModel = svmPipeline.Fit(data);
-        else if (bestResult.Item1 == "RF")
-            bestModel = rfPipeline.Fit(data);
+        RiasecModelMetrics bestMetrics;
+        if (lbfgsMetrics.MicroAccuracy > sdcaMetrics.MicroAccuracy)
+        {
+            bestModel = lbfgsModel;
+            bestMetrics = lbfgsMetrics;
+        }
         else
-            bestModel = sdcaPipeline.Fit(data);
+        {
+            bestModel = sdcaModel;
+            bestMetrics = sdcaMetrics;
+        }
 
-        var riasecModelPath = Path.Combine(Path.GetDirectoryName(modelOutputPath)!, "riasec_model.zip");
-        Directory.CreateDirectory(Path.GetDirectoryName(riasecModelPath)!);
-        _mlContext.Model.Save(bestModel, data.Schema, riasecModelPath);
+        Console.WriteLine($"\nBest RIASEC model: {bestMetrics.AlgorithmName} (Micro Accuracy: {bestMetrics.MicroAccuracy:P2})");
+
+        // Save best model + metrics to MLModel/ alongside model.zip
+        var outDir = Path.GetDirectoryName(modelOutputPath)!;
+        Directory.CreateDirectory(outDir);
+        var riasecModelPath = Path.Combine(outDir, "riasec_model.zip");
+        _mlContext.Model.Save(bestModel, trainData.Schema, riasecModelPath);
         Console.WriteLine($"RIASEC model saved to: {riasecModelPath}");
 
-        // Save metrics
         var allMetrics = new RiasecModelComparison
         {
-            Svm = svmMetrics,
-            RandomForest = rfMetrics,
             Sdca = sdcaMetrics,
-            BestModel = bestResult.Item2.AlgorithmName
+            Lbfgs = lbfgsMetrics,
+            BestModel = bestMetrics.AlgorithmName
         };
-        var metricsPath = Path.Combine(Path.GetDirectoryName(modelOutputPath)!, "riasec_metrics.json");
+        var metricsPath = Path.Combine(outDir, "riasec_metrics.json");
         var json = JsonSerializer.Serialize(allMetrics, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(metricsPath, json);
         Console.WriteLine($"RIASEC metrics saved to: {metricsPath}");
 
-        return bestResult.Item2;
+        return bestMetrics;
     }
 
-    private RiasecModelMetrics AggregateCvMetrics(
-        IReadOnlyList<TrainCatalogBase.CrossValidationResult<MulticlassClassificationMetrics>> cvResults,
-        string algorithmName, int kFolds, int totalRows)
+    private RiasecModelMetrics EvaluateMulticlass(ITransformer model, IDataView testData,
+        int trainCount, int testCount, string algorithmName)
     {
-        var metrics = cvResults.Select(r => r.Metrics).ToList();
+        var predictions = model.Transform(testData);
+        var metrics = _mlContext.MulticlassClassification.Evaluate(predictions, labelColumnName: "Label");
 
-        var macroAccuracy = metrics.Average(m => m.MacroAccuracy);
-        var microAccuracy = metrics.Average(m => m.MicroAccuracy);
-        var logLoss = metrics.Average(m => m.LogLoss);
+        Console.WriteLine($"  Macro Accuracy: {metrics.MacroAccuracy:P2}");
+        Console.WriteLine($"  Micro Accuracy: {metrics.MicroAccuracy:P2}");
+        Console.WriteLine($"  Log Loss:       {metrics.LogLoss:F4}");
 
-        Console.WriteLine($"  {kFolds}-Fold CV Results:");
-        Console.WriteLine($"  Macro Accuracy: {macroAccuracy:P2}");
-        Console.WriteLine($"  Micro Accuracy: {microAccuracy:P2}");
-        Console.WriteLine($"  Log Loss:       {logLoss:F4}");
-
-        // Per-class metrics from the last fold's confusion matrix
-        var lastCm = metrics.Last().ConfusionMatrix;
-        var classLabels = new List<string>();
+        var cm = metrics.ConfusionMatrix;
         var perClassPrecision = new List<double>();
         var perClassRecall = new List<double>();
-
-        for (int i = 0; i < lastCm.NumberOfClasses; i++)
+        for (int i = 0; i < cm.NumberOfClasses; i++)
         {
-            var precision = lastCm.PerClassPrecision[i];
-            var recall = lastCm.PerClassRecall[i];
+            var precision = cm.PerClassPrecision[i];
+            var recall = cm.PerClassRecall[i];
             perClassPrecision.Add(double.IsNaN(precision) ? 0 : precision);
             perClassRecall.Add(double.IsNaN(recall) ? 0 : recall);
         }
 
-        // Extract confusion matrix counts from the last fold
-        var cmCounts = lastCm.Counts;
-        var confMatrix = new int[lastCm.NumberOfClasses][];
-        for (int i = 0; i < lastCm.NumberOfClasses; i++)
+        var counts = cm.Counts;
+        var confMatrix = new int[cm.NumberOfClasses][];
+        for (int i = 0; i < cm.NumberOfClasses; i++)
         {
-            confMatrix[i] = new int[lastCm.NumberOfClasses];
-            for (int j = 0; j < lastCm.NumberOfClasses; j++)
-                confMatrix[i][j] = (int)cmCounts[i][j];
+            confMatrix[i] = new int[cm.NumberOfClasses];
+            for (int j = 0; j < cm.NumberOfClasses; j++)
+                confMatrix[i][j] = (int)counts[i][j];
         }
 
         return new RiasecModelMetrics
         {
             AlgorithmName = algorithmName,
-            MacroAccuracy = macroAccuracy,
-            MicroAccuracy = microAccuracy,
-            LogLoss = logLoss,
-            KFolds = kFolds,
-            TotalRows = totalRows,
+            MacroAccuracy = metrics.MacroAccuracy,
+            MicroAccuracy = metrics.MicroAccuracy,
+            LogLoss = metrics.LogLoss,
+            TrainingRows = trainCount,
+            TestRows = testCount,
             TrainedAt = DateTime.UtcNow,
+            ClassLabels = cm.PerClassPrecision.Select((_, i) => $"Class{i}").ToList(),
             PerClassPrecision = perClassPrecision,
             PerClassRecall = perClassRecall,
             ConfusionMatrix = confMatrix
@@ -224,7 +216,7 @@ public class RiasecTrainer
 
     public PredictionEngine<RiasecFeatures, RiasecPrediction> LoadPredictionEngine(string modelPath)
     {
-        var model = _mlContext.Model.Load(modelPath, out var schema);
+        var model = _mlContext.Model.Load(modelPath, out _);
         return _mlContext.Model.CreatePredictionEngine<RiasecFeatures, RiasecPrediction>(model);
     }
 }
@@ -237,9 +229,10 @@ public class RiasecModelMetrics
     public double MacroAccuracy { get; set; }
     public double MicroAccuracy { get; set; }
     public double LogLoss { get; set; }
-    public int KFolds { get; set; }
-    public int TotalRows { get; set; }
+    public int TrainingRows { get; set; }
+    public int TestRows { get; set; }
     public DateTime TrainedAt { get; set; }
+    public List<string> ClassLabels { get; set; } = new();
     public List<double> PerClassPrecision { get; set; } = new();
     public List<double> PerClassRecall { get; set; } = new();
     public int[][] ConfusionMatrix { get; set; } = Array.Empty<int[]>();
@@ -247,8 +240,7 @@ public class RiasecModelMetrics
 
 public class RiasecModelComparison
 {
-    public RiasecModelMetrics Svm { get; set; } = new();
-    public RiasecModelMetrics RandomForest { get; set; } = new();
     public RiasecModelMetrics Sdca { get; set; } = new();
+    public RiasecModelMetrics Lbfgs { get; set; } = new();
     public string BestModel { get; set; } = "";
 }

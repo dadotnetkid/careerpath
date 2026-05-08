@@ -27,10 +27,12 @@ public class PredictionService
         var features = new StudentFeatures
         {
             YearGraduated = input.YearGraduated,
-            Course = input.Course,
             Gwa = input.Gwa,
+            Honors = input.Honors,
             Competencies = input.Competencies,
-            Interest = input.Interest
+            CareerClarity = input.CareerClarity,
+            Interest = input.Interest,
+            Label = false  // ignored at inference
         };
 
         CareerOutcomePrediction prediction;
@@ -67,22 +69,25 @@ public class PredictionService
     private static string GenerateInterpretation(StudentInput input, string outcome, float confidence)
     {
         var pct = (confidence * 100).ToString("F1");
+        var competencies = string.IsNullOrWhiteSpace(input.Competencies) ? "your competencies" : input.Competencies;
+        var gwa = string.IsNullOrWhiteSpace(input.Gwa) ? "your GWA category" : input.Gwa;
+        var riasec = string.IsNullOrWhiteSpace(input.Interest) ? "your RIASEC code" : input.Interest;
 
         if (outcome == "ICT-Aligned")
         {
             return $"Based on the analysis of your profile, the model predicts with {pct}% confidence " +
                    $"that your career path is likely to be ICT-Aligned. " +
-                   $"Students from {input.Course} with similar academic performance (GWA: {input.Gwa:F2}) " +
-                   $"and interests have historically pursued careers in the ICT industry. " +
+                   $"Alumni with a similar profile - competencies in {competencies}, GWA category \"{gwa}\", " +
+                   $"and RIASEC code {riasec} - have historically pursued careers in the ICT industry. " +
                    $"This suggests your skills and interests align well with information and communications technology roles.";
         }
         else
         {
             return $"Based on the analysis of your profile, the model predicts with {pct}% confidence " +
                    $"that your career path may lead to a Non-ICT-Aligned field. " +
-                   $"This does not indicate a negative outcome; many {input.Course} graduates " +
-                   $"successfully apply their technical skills in diverse industries. " +
-                   $"Consider exploring how your competencies can be leveraged across different sectors.";
+                   $"This is not a negative outcome; many graduates with competencies in {competencies} " +
+                   $"and RIASEC code {riasec} successfully apply their skills across diverse industries. " +
+                   $"Consider exploring how a GWA category of \"{gwa}\" combined with your interests can be leveraged in different sectors.";
         }
     }
 }

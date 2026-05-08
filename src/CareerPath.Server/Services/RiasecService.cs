@@ -1,4 +1,4 @@
-using CareerPath.Shared;
+﻿using CareerPath.Shared;
 
 namespace CareerPath.Server.Services;
 
@@ -27,25 +27,16 @@ public class RiasecService
         ["C"] = new() { "Database Administrator", "Systems Administrator", "QA Analyst", "IT Auditor", "Data Governance Specialist" }
     };
 
+    // 7 canonical Competencies values from the GTS 3 dataset
     public static readonly List<string> AvailableSkills = new()
     {
-        "Technical Skills",
-        "Programming Skills",
-        "Data Analysis & Business Intelligence",
-        "Network Administration",
-        "Software Development",
-        "Technical Writing",
-        "Cybersecurity",
-        "Database Management",
-        "Machine Learning & AI",
-        "Communication Skills",
-        "Human Relations Skills",
-        "Entrepreneurial Skills",
         "Information Technology Skills",
+        "Communication Skills",
         "Problem-Solving Skills",
-        "Critical Thinking Skills",
-        "Leadership",
-        "Organizational Skills"
+        "Entrepreneurial Skills",
+        "Organizational Skills",
+        "Human Relations Skills",
+        "Critical Thinking"
     };
 
     // ── RIASEC Multiple-Choice Questions ──
@@ -214,12 +205,12 @@ public class RiasecService
                 roles.AddRange(list);
         }
 
-        // Also add actual job positions from alumni data matching the code
+        // Also add actual job titles from alumni data matching the code
         var alumni = _dataset.GetAllRecords();
         var alumniJobs = alumni
             .Where(a => !string.IsNullOrEmpty(a.Interest) && a.Interest.Length >= 1
                         && dominantCode.Contains(a.Interest[0]))
-            .Select(a => a.JobPosition)
+            .Select(a => a.JobTitle)
             .Where(j => !string.IsNullOrWhiteSpace(j))
             .GroupBy(j => j)
             .OrderByDescending(g => g.Count())
@@ -320,6 +311,15 @@ public class RiasecService
             _ => "Highly Uncertain"
         };
 
+        // Discrete bucket used as a feature for the binary classifier.
+        // Thresholds are calibrated against the GTS 3 dataset's CareerClarity distribution.
+        string bucket = total switch
+        {
+            >= 17 => "High",
+            >= 10 => "Medium",
+            _ => "Low"
+        };
+
         return new CareerClarityResult
         {
             FitScore = Math.Round(fitScore, 2),
@@ -328,58 +328,70 @@ public class RiasecService
             SalaryNeutralScore = salaryNeutralScore,
             RiasecAlignmentScore = riasecAlignmentScore,
             TotalScore = Math.Round(total, 2),
-            ClarityLabel = label
+            ClarityLabel = label,
+            ClarityBucket = bucket
         };
     }
 
     // ── Step 3+4: Matching Algorithm ──
 
+    /// <summary>
+    /// Match alumni jobs based on:
+    ///   - alumni's RiasecDominant (full name like "Conventional") → first letter must match one of
+    ///     the user's top-3 RIASEC letters from <paramref name="dominantCode"/>
+    ///   AND
+    ///   - same Gwa category OR at least one matching skill in Competencies
+    /// </summary>
     public List<JobMatch> MatchJobs(string dominantCode, string gwaCategory, List<string> skills)
     {
         var alumni = _dataset.GetAllRecords();
+        var topLetters = (dominantCode ?? "").ToUpperInvariant()
+            .Where(ch => "RIASEC".Contains(ch))
+            .Distinct()
+            .ToHashSet();
 
-        // Score each alumni record based on match criteria
         var scored = new List<(AlumniRecord record, double score)>();
 
         foreach (var a in alumni)
         {
-            if (string.IsNullOrEmpty(a.Interest) || a.Interest.Length < 2) continue;
+            // Map the alumni's full RIASEC dimension name to its single letter.
+            var alumniLetter = MapRiasecDominantToLetter(a.RiasecDominant);
+            if (alumniLetter == '\0') continue;
+
+            // Required: alumni's RIASEC letter overlaps with user's top-3
+            if (!topLetters.Contains(alumniLetter)) continue;
+
+            // Required: same GWA OR at least one matching skill
+            bool gwaMatch = !string.IsNullOrEmpty(gwaCategory)
+                && a.Gwa.Equals(gwaCategory, StringComparison.OrdinalIgnoreCase);
+
+            int skillsMatched = 0;
+            if (skills != null && skills.Count > 0)
+            {
+                var alumniSkills = (a.Competencies ?? "").ToLowerInvariant();
+                skillsMatched = skills.Count(s => !string.IsNullOrWhiteSpace(s) &&
+                    alumniSkills.Contains(s.ToLowerInvariant()));
+            }
+
+            if (!gwaMatch && skillsMatched == 0) continue;
 
             double score = 0;
+            // RIASEC alignment: bonus if the alumni's letter is the user's primary (first) letter.
+            if (!string.IsNullOrEmpty(dominantCode) && char.ToUpperInvariant(dominantCode[0]) == alumniLetter)
+                score += 40;
+            else
+                score += 20;
 
-            // RIASEC code match — compare dominant letters
-            var alumniCode = a.Interest.ToUpper();
-            for (int i = 0; i < Math.Min(dominantCode.Length, alumniCode.Length); i++)
-            {
-                if (dominantCode.Contains(alumniCode[i]))
-                    score += (i == 0) ? 40 : 20; // Primary match worth more
-            }
-            if (dominantCode.Length >= 1 && alumniCode.Length >= 1 && dominantCode[0] == alumniCode[0])
-                score += 15; // Bonus for exact first-letter match
+            if (gwaMatch) score += 15;
+            score += skillsMatched * 5;
 
-            // GWA category match
-            var alumniGwaCategory = CategorizeGwa(a.Gwa);
-            if (alumniGwaCategory == gwaCategory)
-                score += 15;
-            else if (AreAdjacentGwaCategories(alumniGwaCategory, gwaCategory))
-                score += 7;
-
-            // Skills/competency match
-            if (skills.Count > 0)
-            {
-                var alumniSkills = a.Competencies.ToLower();
-                int matched = skills.Count(s => alumniSkills.Contains(s.ToLower()) ||
-                    alumniSkills.Contains(s.Split(' ')[0].ToLower()));
-                score += matched * 5;
-            }
-
-            if (score > 0)
-                scored.Add((a, score));
+            scored.Add((a, score));
         }
 
-        // Group by job position and aggregate
+        // Group by job title and aggregate
         var jobMatches = scored
-            .GroupBy(x => x.record.JobPosition)
+            .Where(x => !string.IsNullOrWhiteSpace(x.record.JobTitle))
+            .GroupBy(x => x.record.JobTitle)
             .Select(g => new JobMatch
             {
                 JobTitle = g.Key,
@@ -407,19 +419,24 @@ public class RiasecService
         return jobMatches;
     }
 
-    private static string CategorizeGwa(float gwa) => gwa switch
+    /// <summary>
+    /// Map the GTS 3 dataset's full RIASEC dimension name to its first letter.
+    /// Returns '\0' if the input is empty or unrecognized.
+    /// </summary>
+    private static char MapRiasecDominantToLetter(string riasecDominant)
     {
-        <= 1.25f => "Outstanding",
-        <= 2.00f => "Very Satisfactory",
-        <= 2.75f => "Satisfactory",
-        _ => "Fair"
-    };
-
-    private static bool AreAdjacentGwaCategories(string a, string b)
-    {
-        var order = new[] { "Outstanding", "Very Satisfactory", "Satisfactory", "Fair" };
-        int ia = Array.IndexOf(order, a), ib = Array.IndexOf(order, b);
-        return ia >= 0 && ib >= 0 && Math.Abs(ia - ib) == 1;
+        if (string.IsNullOrWhiteSpace(riasecDominant)) return '\0';
+        var trimmed = riasecDominant.Trim();
+        return trimmed.ToLowerInvariant() switch
+        {
+            "realistic" => 'R',
+            "investigative" => 'I',
+            "artistic" => 'A',
+            "social" => 'S',
+            "enterprising" => 'E',
+            "conventional" => 'C',
+            _ => '\0'
+        };
     }
 
     // ── Step 5: AI Analysis via GPT-4o-mini ──

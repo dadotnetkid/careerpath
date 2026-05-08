@@ -2,21 +2,72 @@
   "RandomForest": {
     "AlgorithmName": "Random Forest (FastForest)",
     "Accuracy": 0.76,
-    "Precision": 0.7741935483870968,
-    "Recall": 0.8275862068965517,
-    "F1Score": 0.7999999999999999,
-    "AreaUnderRocCurve": 0.8275862068965517,
+    "Precision": 0.84,
+    "Recall": 0.7241379310344828,
+    "F1Score": 0.7777777777777777,
+    "AreaUnderRocCurve": 0.8111658456486043,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-04-27T04:22:07.9099626Z",
+    "TrainedAt": "2026-05-08T08:58:10.4247718Z",
     "ConfusionMatrix": [
       [
-        24,
-        5
+        21,
+        8
       ],
       [
-        7,
-        14
+        4,
+        17
+      ]
+    ],
+    "ClassLabels": [
+      "ICT-Aligned",
+      "Non-ICT-Aligned"
+    ],
+    "FeatureImportances": [
+      {
+        "FeatureName": "CareerClarity",
+        "Importance": 44.83
+      },
+      {
+        "FeatureName": "Interest",
+        "Importance": 36.55
+      },
+      {
+        "FeatureName": "Competencies",
+        "Importance": 18.62
+      },
+      {
+        "FeatureName": "YearGraduated",
+        "Importance": 0
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 0
+      },
+      {
+        "FeatureName": "Honors",
+        "Importance": 0
+      }
+    ]
+  },
+  "DecisionTree": {
+    "AlgorithmName": "Decision Tree (FastTree)",
+    "Accuracy": 0.78,
+    "Precision": 0.8461538461538461,
+    "Recall": 0.7586206896551724,
+    "F1Score": 0.8,
+    "AreaUnderRocCurve": 0.80623973727422,
+    "TrainingRows": 251,
+    "TestRows": 50,
+    "TrainedAt": "2026-05-08T08:58:13.3774288Z",
+    "ConfusionMatrix": [
+      [
+        22,
+        7
+      ],
+      [
+        4,
+        17
       ]
     ],
     "ClassLabels": [
@@ -26,40 +77,44 @@
     "FeatureImportances": [
       {
         "FeatureName": "Interest",
-        "Importance": 57.59
+        "Importance": 36.79
+      },
+      {
+        "FeatureName": "CareerClarity",
+        "Importance": 33.16
       },
       {
         "FeatureName": "Competencies",
-        "Importance": 26.58
-      },
-      {
-        "FeatureName": "Gwa",
-        "Importance": 15.19
+        "Importance": 24.87
       },
       {
         "FeatureName": "YearGraduated",
-        "Importance": 0.63
+        "Importance": 5.18
       },
       {
-        "FeatureName": "Course",
+        "FeatureName": "Gwa",
+        "Importance": 0
+      },
+      {
+        "FeatureName": "Honors",
         "Importance": 0
       }
     ]
   },
-  "DecisionTree": {
-    "AlgorithmName": "Decision Tree (FastTree)",
-    "Accuracy": 0.7,
-    "Precision": 0.7333333333333333,
-    "Recall": 0.7586206896551724,
-    "F1Score": 0.7457627118644068,
-    "AreaUnderRocCurve": 0.7619047619047619,
+  "LogisticRegression": {
+    "AlgorithmName": "Logistic Regression (LBFGS)",
+    "Accuracy": 0.74,
+    "Precision": 0.75,
+    "Recall": 0.8275862068965517,
+    "F1Score": 0.7868852459016394,
+    "AreaUnderRocCurve": 0.7898193760262726,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-04-27T04:22:08.548121Z",
+    "TrainedAt": "2026-05-08T08:58:14.7554193Z",
     "ConfusionMatrix": [
       [
-        22,
-        7
+        24,
+        5
       ],
       [
         8,
@@ -72,70 +127,27 @@
     ],
     "FeatureImportances": [
       {
-        "FeatureName": "Competencies",
-        "Importance": 41.36
+        "FeatureName": "CareerClarity",
+        "Importance": 42.86
       },
       {
         "FeatureName": "Interest",
-        "Importance": 31.48
+        "Importance": 42.86
       },
       {
-        "FeatureName": "Gwa",
-        "Importance": 25.31
+        "FeatureName": "Competencies",
+        "Importance": 14.29
       },
       {
         "FeatureName": "YearGraduated",
-        "Importance": 1.85
-      },
-      {
-        "FeatureName": "Course",
         "Importance": 0
-      }
-    ]
-  },
-  "LogisticRegression": {
-    "AlgorithmName": "Logistic Regression (LBFGS)",
-    "Accuracy": 0.74,
-    "Precision": 0.7666666666666667,
-    "Recall": 0.7931034482758621,
-    "F1Score": 0.7796610169491527,
-    "AreaUnderRocCurve": 0.770935960591133,
-    "TrainingRows": 251,
-    "TestRows": 50,
-    "TrainedAt": "2026-04-27T04:22:08.9011595Z",
-    "ConfusionMatrix": [
-      [
-        23,
-        6
-      ],
-      [
-        7,
-        14
-      ]
-    ],
-    "ClassLabels": [
-      "ICT-Aligned",
-      "Non-ICT-Aligned"
-    ],
-    "FeatureImportances": [
-      {
-        "FeatureName": "Interest",
-        "Importance": 65.58
-      },
-      {
-        "FeatureName": "Competencies",
-        "Importance": 23.38
-      },
-      {
-        "FeatureName": "Course",
-        "Importance": 11.04
       },
       {
         "FeatureName": "Gwa",
         "Importance": 0
       },
       {
-        "FeatureName": "YearGraduated",
+        "FeatureName": "Honors",
         "Importance": 0
       }
     ]

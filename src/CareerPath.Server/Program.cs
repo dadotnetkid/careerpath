@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using CareerPath.Server.Data;
 using CareerPath.Server.Services;
 
@@ -20,7 +20,7 @@ string ResolveContentPath(string relativeFromBase, string relativeFromSolution)
     return dir != null ? Path.Combine(dir.FullName, relativeFromSolution) : fromBase;
 }
 
-var csvPath = ResolveContentPath(Path.Combine("data", "alumni.csv"), Path.Combine("data", "alumni.csv"));
+var csvPath = ResolveContentPath(Path.Combine("data", "alumni_gts3.csv"), Path.Combine("data", "alumni_gts3.csv"));
 var modelPath = ResolveContentPath(Path.Combine("MLModel", "model.zip"), Path.Combine("src", "CareerPath.Server", "MLModel", "model.zip"));
 var metricsPath = ResolveContentPath(Path.Combine("MLModel", "metrics.json"), Path.Combine("src", "CareerPath.Server", "MLModel", "metrics.json"));
 

@@ -143,13 +143,14 @@ else if (comparison != null)
             @if (comparison.RandomForest.FeatureImportances?.Any() == true)
             {
                 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                    Relative contribution of each feature to the model's prediction accuracy, computed via
+                    Relative contribution of each of the 6 input features (Year Graduated, GWA, Honors, Competencies,
+                    Career Clarity, Interest) to the model's prediction accuracy, computed via
                     Permutation Feature Importance (analogous to Mean Decrease in Accuracy).
                 </MudText>
                 @foreach (var fi in comparison.RandomForest.FeatureImportances.OrderByDescending(f => f.Importance))
                 {
                     <div class="d-flex align-center mb-3" style="gap:12px;">
-                        <MudText Typo="Typo.body2" Style="width:130px; text-align:right; font-weight:500; flex-shrink:0;">@fi.FeatureName</MudText>
+                        <MudText Typo="Typo.body2" Style="width:140px; text-align:right; font-weight:500; flex-shrink:0;">@fi.FeatureName</MudText>
                         <MudProgressLinear Value="@fi.Importance" Rounded="true" Size="Size.Large" Color="Color.Primary"
                                            Style="flex:1; height:28px;" />
                         <MudText Typo="Typo.body2" Color="Color.Primary" Style="width:60px; font-weight:700; flex-shrink:0;">@fi.Importance.ToString("F2")%</MudText>
@@ -168,15 +169,19 @@ else if (comparison != null)
         <MudCardContent>
             <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">Training Information</MudText>
             <MudGrid Spacing="3">
-                <MudItem xs="4">
+                <MudItem xs="6" md="3">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Records</MudText>
+                    <MudText Typo="Typo.h6">@(comparison.RandomForest.TrainingRows + comparison.RandomForest.TestRows)</MudText>
+                </MudItem>
+                <MudItem xs="6" md="3">
                     <MudText Typo="Typo.caption" Color="Color.Secondary">Training Rows</MudText>
                     <MudText Typo="Typo.h6">@comparison.RandomForest.TrainingRows</MudText>
                 </MudItem>
-                <MudItem xs="4">
+                <MudItem xs="6" md="3">
                     <MudText Typo="Typo.caption" Color="Color.Secondary">Test Rows</MudText>
                     <MudText Typo="Typo.h6">@comparison.RandomForest.TestRows</MudText>
                 </MudItem>
-                <MudItem xs="4">
+                <MudItem xs="6" md="3">
                     <MudText Typo="Typo.caption" Color="Color.Secondary">Trained At</MudText>
                     <MudText Typo="Typo.h6">@comparison.RandomForest.TrainedAt.ToString("g")</MudText>
                 </MudItem>
