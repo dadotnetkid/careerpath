@@ -46,8 +46,9 @@ CiteTracker/
 ├── MANUSCRIPT_EDITS.md              Required thesis manuscript changes
 ├── ARCHITECTURE.md                  Full technical documentation
 ├── data/
-│   ├── alumni_raw.csv               Original CHED GTS data (untouched)
-│   └── alumni.csv                   Cleaned data with binary CareerOutcome
+│   ├── alumni_raw.csv               Legacy CHED GTS data (kept for traceability, not used by code)
+│   ├── alumni.csv                   Legacy cleaned dataset (kept for traceability, not used by code)
+│   └── alumni_gts3.csv              Canonical GTS 3 dataset (n=301, 14 columns) used by trainer + server
 ├── images/
 │   └── nvsulogo.png                 NVSU official logo
 └── src/
@@ -96,7 +97,7 @@ CiteTracker/
 |--------|-------|-------------|----------|
 | POST | `/api/predict` | `StudentInput` JSON | `PredictionResult` with outcome, confidence, scores |
 | GET | `/api/predict/status` | — | `{ ready: true/false }` |
-| GET | `/api/dataset?page=1&pageSize=50&course=BSIT&search=foo` | — | Paginated `AlumniRecord[]` |
+| GET | `/api/dataset?page=1&pageSize=50&honors=Cum%20Laude&search=foo` | — | Paginated `AlumniRecord[]` |
 | GET | `/api/dataset/summary` | — | `DatasetSummary` with counts and stats |
 | GET | `/api/metrics` | — | `ModelMetrics` (Random Forest only) |
 | GET | `/api/metrics/comparison` | — | `ModelComparison` (RF + DT + LR) |
@@ -105,32 +106,37 @@ CiteTracker/
 
 ## Model Results
 
-### Performance (80/20 stratified split, seed=42)
+The canonical metrics live in **`src/CareerPath.Server/MLModel/metrics.json`** and are regenerated every time the trainer runs. Always quote that file for the manuscript and the dashboard rather than the figures below — the snapshot here is illustrative and may lag a retrain.
+
+### Performance (80/20 stratified split, seed=42, snapshot 2026-05-08)
 
 | Algorithm | Accuracy | Precision | Recall | F1 Score | AUC |
 |-----------|----------|-----------|--------|----------|-----|
-| **Random Forest (FastForest)** | **76.00%** | **77.42%** | **82.76%** | **80.00%** | **82.76%** |
-| Logistic Regression (LBFGS) | 74.00% | 76.67% | 79.31% | 77.97% | 77.18% |
-| Decision Tree (FastTree) | 70.00% | 73.33% | 75.86% | 74.58% | 76.19% |
+| Decision Tree (FastTree) | 0.78 | 0.846 | 0.759 | 0.800 | 0.806 |
+| **Random Forest (FastForest)** | **0.76** | **0.840** | **0.724** | **0.778** | **0.811** |
+| Logistic Regression (LBFGS) | 0.74 | 0.750 | 0.828 | 0.787 | 0.790 |
 
-### Feature Importance (Random Forest - PFI)
+Random Forest remains the primary model per Objective 2, while Decision Tree and Logistic Regression are reported for the Objective 6 comparison.
+
+### Feature Importance (Random Forest - PFI, snapshot from `metrics.json`)
 
 | Feature | Importance |
 |---------|-----------|
-| Interest | 57.59% |
-| Competencies | 26.58% |
-| GWA | 15.19% |
-| Year Graduated | 0.63% |
-| Course | 0.00% |
+| CareerClarity | 44.83% |
+| Interest | 36.55% |
+| Competencies | 18.62% |
+| YearGraduated | 0.00% |
+| Gwa | 0.00% |
+| Honors | 0.00% |
 
-Key finding: **Interest is the strongest predictor** of career alignment, followed by Competencies, then GWA.
+Key finding: **Career Clarity and RIASEC Interest dominate the signal**, with Competencies a distant third. YearGraduated, Gwa, and Honors carry effectively zero permutation importance on this split — see the limitations section for the class-imbalance note that explains this. Always copy the live percentages from `metrics.json` for the manuscript rather than restating the snapshot above.
 
-### Confusion Matrix (Random Forest)
+### Confusion Matrix (Random Forest, snapshot from `metrics.json`)
 
 |  | Predicted ICT | Predicted Non-ICT |
 |--|--------------|-------------------|
-| **Actual ICT** | 24 (TP) | 5 (FN) |
-| **Actual Non-ICT** | 7 (FP) | 14 (TN) |
+| **Actual ICT** | 21 (TP) | 8 (FN) |
+| **Actual Non-ICT** | 4 (FP) | 17 (TN) |
 
 ---
 
@@ -149,9 +155,9 @@ Key finding: **Interest is the strongest predictor** of career alignment, follow
 
 ## How Retraining Works
 
-1. Update or replace `data/alumni.csv` with new records (keep the same column headers)
+1. Update or replace `data/alumni_gts3.csv` with new records (keep the same 14-column GTS 3 header)
 2. Run `dotnet run --project src/CareerPath.ML`
-3. The trainer outputs `model.zip` and `metrics.json` to `src/CareerPath.Server/MLModel/`
+3. The trainer outputs `model.zip`, `metrics.json`, `riasec_model.zip`, and `riasec_metrics.json` to `src/CareerPath.Server/MLModel/`
 4. Restart the server: `dotnet run --project src/CareerPath.Server`
 
 ---
@@ -180,7 +186,17 @@ Key finding: **Interest is the strongest predictor** of career alignment, follow
 - [ ] Test the Insights page: verify metrics table, confusion matrix, feature importance bars appear
 - [ ] Open Swagger at `/swagger` as backup proof the API works
 - [ ] Have `metrics.json` open in notepad as backup if the dashboard fails
-- [ ] Sample input ready to type: Course=BSIT, Year=2024, GWA=2.5, Competencies="Technical Skills, Problem Solving", Interest="Software Development"
+- [ ] Sample `StudentInput` ready to paste into Swagger or the Predict page:
+  ```json
+  {
+    "yearGraduated": 2026,
+    "gwa": "Very Satisfactory",
+    "honors": "Cum Laude",
+    "competencies": "Information Technology Skills, Problem-Solving Skills",
+    "careerClarity": "High",
+    "interest": "IRC"
+  }
+  ```
 
 ---
 
@@ -188,9 +204,10 @@ Key finding: **Interest is the strongest predictor** of career alignment, follow
 
 - **Small dataset (n=301):** Future work should expand across multiple HEIs
 - **Class distribution:** 155 ICT-Aligned vs 146 Non-ICT-Aligned (nearly balanced, but small)
-- **Model accuracy (76%):** Reflects feature limitations and dataset size, not bugs. Substantially outperforms the 51.5% majority-class baseline
+- **Model accuracy:** See `src/CareerPath.Server/MLModel/metrics.json` for the live numbers. The classifier substantially outperforms the 51.5% majority-class baseline; remaining error reflects dataset size and the categorical nature of several features rather than bugs
 - **Cross-school generalization:** Untested; trained exclusively on NVSU CITE alumni
-- **Career Clarity:** Dropped because the column was empty (0/301 rows had values)
+- **Career Clarity is now a live feature.** Under the GTS 3 instrument the column is populated for all 301 records (Low 100 / Medium 164 / High 37) and the trained Random Forest assigns it the highest permutation importance (~44.83%). The earlier "Career Clarity dropped because the column was empty" caveat applied to the legacy `data/alumni.csv` and no longer holds
+- **Class imbalance in categorical features:** Approximately 68% of respondents fall in the "Very Satisfactory" GWA band and approximately 83% report "No Honors". This compresses the predictive signal for those two columns and is the most likely reason their permutation importance reads as 0 on the current split
 - **Text features:** Competencies and Interest are processed via TF-IDF, which may not capture semantic meaning as well as embeddings would
 
 ---

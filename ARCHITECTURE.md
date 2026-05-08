@@ -42,7 +42,7 @@ The system has 4 projects in a single .NET solution:
 │  ┌──────▼──────┐    ┌──────────▼─────────┐              │
 │  │ Prediction  │    │  Dataset           │              │
 │  │ Service     │    │  Service           │              │
-│  │ (model.zip) │    │  (alumni.csv)      │              │
+│  │ (model.zip) │    │  (alumni_gts3.csv) │              │
 │  └─────────────┘    └────────────────────┘              │
 │         │                                                │
 │  ┌──────▼──────┐                                        │
@@ -53,8 +53,8 @@ The system has 4 projects in a single .NET solution:
 
 ┌─────────────────────────────────────────────────────────┐
 │  CareerPath.ML  (Console app — run separately)          │
-│  Reads alumni.csv → Trains 3 models → Saves model.zip   │
-│  + metrics.json                                          │
+│  Reads alumni_gts3.csv → Trains 3 models → Saves        │
+│  model.zip + metrics.json (+ RIASEC model)              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -67,16 +67,9 @@ The system has 4 projects in a single .NET solution:
 
 ## 2. Data Pipeline
 
-### 2.1 Raw Data (`data/alumni_raw.csv`)
+### 2.1 Raw Data
 
-The original CHED Graduate Tracer Study data with columns:
-- `ID`, `NAME`, `YEAR GRADUATED`, `COURSE`, `GWA`
-- `JOB POSITION`, `FIELD OF INDUSTRY` (career outcomes — NOT used as features)
-- `Competencies` (self-assessed skills like "Technical Skills", "Problem Solving")
-- `Employment Status` (NOT used as feature — it's an outcome)
-- `Career Alignment` (original 4-class label: "Core ICT-Related", "ICT-Adjascent", "Non-ICT but Adjascent", "Non-ICT")
-- `Job Retention`, `Career Clarity` (Career Clarity is empty for all 301 rows)
-- `Interest` (3-letter codes like "CSE", "RIC", "IRC" — these are RIASEC Holland codes)
+The original `data/alumni_raw.csv` and the legacy cleaned `data/alumni.csv` remain on disk for traceability but are no longer read by the trainer or the server. The canonical source of truth is the GTS 3 dataset described below; everything in the running system reads from it.
 
 ### 2.2 What is RIASEC?
 
@@ -98,25 +91,39 @@ Each student has a 3-letter code representing their top 3 interest types. For ex
 
 The model treats these as text features (TF-IDF), so each unique letter/combination gets its own weight.
 
-### 2.3 Cleaned Data (`data/alumni.csv`)
+### 2.3 Canonical Data (`data/alumni_gts3.csv`)
 
-The cleaning script:
-1. Renames columns to C#-friendly names (e.g., `YEAR GRADUATED` → `YearGraduated`)
-2. Creates the binary `CareerOutcome` column:
-   - `"Core ICT-Related"` OR `"ICT-Adjascent"` → **`"ICT-Aligned"`** (155 records)
-   - `"Non-ICT but Adjascent"` OR `"Non-ICT"` → **`"Non-ICT-Aligned"`** (146 records)
-3. Trims whitespace from all values
+The GTS 3 dataset (n=301, 14 columns) is the single source of truth for both the trainer and the server. The header is:
+
+```
+YearGraduated, Gwa, Honors, Competencies, EmploymentStatus, CareerAlignment,
+JobRetention, CareerClarity, RiasecDominant, Interest, FieldOfIndustry,
+JobLevel, JobTitle, CareerOutcome
+```
+
+Cleaning applied to produce this file (already done — do not re-run):
+1. Whitespace collapsed (`"Very   Satisfactory"` → `"Very Satisfactory"`)
+2. Spelling corrected (`Entrepreunial` → `Entrepreneurial`, `Problem-solving` → `Problem-Solving`)
+3. Pre-computed binary `CareerOutcome` column derived from `CareerAlignment`:
+   - `"Core ICT"` OR `"ICT-Adjacent"` → **`"ICT-Aligned"`** (155 records)
+   - `"Non-ICT but Adjacent"` OR `"Non-ICT"` → **`"Non-ICT-Aligned"`** (146 records)
+
+Note the modern spelling **`ICT-Adjacent`** (one word, no `s`). The legacy `ICT-Adjascent` typo only appeared in the old `data/alumni.csv` and is no longer present anywhere in the live pipeline.
+
+The trainer re-derives `Label` from `CareerAlignment` via CustomMapping rather than trusting the precomputed `CareerOutcome` column, so changing the label rule later does not require re-cleaning the CSV.
 
 ### 2.4 Data Leakage Prevention
 
 These columns exist in the CSV but are **NEVER used as features** because they are consequences of the career outcome, not predictors:
-- `JobPosition` — knowing someone is a "Software Developer" tells you they're ICT-Aligned
+- `JobTitle` — knowing someone is a "Software Developer" tells you they're ICT-Aligned
 - `FieldOfIndustry` — knowing someone works in "Technology" leaks the answer
 - `EmploymentStatus` — not a predictor of ICT vs Non-ICT
 - `JobRetention` — post-employment metric
+- `JobLevel` — post-employment metric
 - `CareerAlignment` — the original 4-class label (directly leaks the answer)
+- `RiasecDominant` — redundant with `Interest` (it is just the first letter of the triplet)
 
-**Only these 5 columns are used as features:** `Gwa`, `YearGraduated`, `Course`, `Competencies`, `Interest`
+**Only these 6 columns are used as features, in the order `StudentInput` expects them:** `YearGraduated`, `Gwa`, `Honors`, `Competencies`, `CareerClarity`, `Interest`
 
 ---
 
@@ -126,9 +133,10 @@ These columns exist in the CSV but are **NEVER used as features** because they a
 
 Defines the ML.NET data schemas:
 
-- **`AlumniCsvRow`** — maps to the CSV columns using `[LoadColumn(N)]` attributes. ML.NET reads the CSV into these objects.
-- **`StudentFeatures`** — the input schema for predictions: `Gwa`, `YearGraduated`, `Course`, `Competencies`, `Interest`, `Label`
+- **`AlumniCsvRow`** — maps to the GTS 3 CSV columns using `[LoadColumn(N)]` attributes. ML.NET reads the CSV into these objects.
+- **`StudentFeatures`** — the input schema for predictions: `YearGraduated`, `Gwa`, `Honors`, `Competencies`, `CareerClarity`, `Interest`, `Label`
 - **`CareerOutcomePrediction`** — the output schema: `PredictedLabel` (bool), `Score` (raw), `Probability` (0-1)
+- **`RiasecFeatures`** / **`RiasecPrediction`** — companion schemas used by the secondary RIASEC trainer (`riasec_model.zip`)
 
 ### 3.2 File: `CareerPath.ML/CareerPathTrainer.cs`
 
@@ -144,22 +152,33 @@ This is the core ML file. Here's what each method does:
 Creates the feature engineering pipeline (this is the same for all 3 models):
 
 ```
-Step 1: OneHotEncoding("Course")
-        → BSIT becomes [1,0,0], BSCS becomes [0,1,0], BSIS becomes [0,0,1]
+Step 1: OneHotEncoding("Gwa")
+        → "Outstanding" / "Very Satisfactory" / "Satisfactory" / "Fair"
+          becomes a 4-element indicator vector
 
-Step 2: FeaturizeText("Competencies")
-        → TF-IDF converts "Technical Skills, Problem Solving" into a numeric vector
-        → Each unique word/n-gram gets a weight based on frequency
+Step 2: OneHotEncoding("Honors")
+        → "No Honors" / "Cum Laude" / "Magna Cum Laude" / "Summa Cum Laude"
+          becomes a 4-element indicator vector
 
-Step 3: FeaturizeText("Interest")
-        → TF-IDF converts "CSE" or "IRC" into numeric vectors
-        → This is why Interest has high importance — the RIASEC codes
-          strongly correlate with career alignment
+Step 3: OneHotEncoding("CareerClarity")
+        → "Low" / "Medium" / "High" becomes a 3-element indicator vector
 
-Step 4: Concatenate all into a single "Features" vector:
-        [Gwa, YearGraduated, CourseEncoded..., CompetenciesFeaturized..., InterestFeaturized...]
+Step 4: FeaturizeText("Competencies")
+        → TF-IDF converts "Information Technology Skills, Problem-Solving Skills"
+          into a numeric vector; each unique word/n-gram gets a weight based
+          on frequency
 
-Step 5: NormalizeMinMax("Features")
+Step 5: FeaturizeText("Interest")
+        → TF-IDF converts the RIASEC triplet "CSE" or "IRC" into a numeric
+          vector; this is why Interest carries strong predictive signal —
+          the dominant Holland code correlates tightly with career alignment
+
+Step 6: Concatenate all into a single "Features" vector:
+        [YearGraduated, GwaEncoded..., HonorsEncoded...,
+         CompetenciesFeaturized..., CareerClarityEncoded...,
+         InterestFeaturized...]
+
+Step 7: NormalizeMinMax("Features")
         → Scales all values to 0-1 range so no single feature dominates
 ```
 
@@ -190,7 +209,7 @@ Runs each trained model on the test set and computes:
 Manual implementation of **Permutation Feature Importance (PFI)**:
 
 1. Start with the model's baseline accuracy on the test set
-2. For each feature (Gwa, YearGraduated, Course, Competencies, Interest):
+2. For each feature (YearGraduated, Gwa, Honors, Competencies, CareerClarity, Interest):
    a. Randomly shuffle that feature's values across all test rows (10 times)
    b. Re-run the model on the shuffled data
    c. Measure how much accuracy drops
@@ -234,10 +253,10 @@ Server startup:
 
 ### 4.2 File: `Services/DatasetService.cs`
 
-- Loads `alumni.csv` into a `List<AlumniRecord>` at startup using CsvHelper
-- `GetSummary()` — computes total records, counts by course/outcome/year, GWA stats
-- `GetRecords(page, pageSize, course, search)` — filters and paginates the records
-- `FindSimilarAlumniJobs()` — finds the top 5 most common job positions among alumni with the same predicted outcome and similar profile
+- Loads `alumni_gts3.csv` into a `List<AlumniRecord>` at startup using CsvHelper
+- `GetSummary()` — computes total records, counts by `Gwa`, `Honors`, `CareerOutcome`, `CareerClarity`, `EmploymentStatus`, `RiasecDominant`, and `YearGraduated`
+- `GetRecords(page, pageSize, honors, search)` — filters by `Honors` (and a substring search across Competencies / JobTitle / FieldOfIndustry) and paginates the records
+- `FindSimilarAlumniJobs()` — finds the top 5 most common `JobTitle` values among alumni with the same predicted outcome and similar `Honors` / `Gwa` / `Interest` profile
 
 ### 4.3 File: `Services/PredictionService.cs`
 
@@ -254,7 +273,7 @@ Server startup:
 
 ### 4.5 File: `Controllers/DatasetController.cs`
 
-- `GET /api/dataset` — paginated alumni records with optional course/search filters
+- `GET /api/dataset` — paginated alumni records with optional `honors` / `search` filters
 - `GET /api/dataset/summary` — summary statistics
 - `GET /api/metrics` — Random Forest metrics only (reads `metrics.json`)
 - `GET /api/metrics/comparison` — all three models (reads `metrics.json`)
@@ -263,8 +282,8 @@ Server startup:
 
 SQLite database with one table `PredictionLogs`:
 - Records every prediction made through the API
-- Fields: Course, YearGraduated, Gwa, Competencies, Interest, PredictedOutcome, Confidence, PredictedAt
-- Database file: `careerpath.db` (auto-created on first run)
+- Fields: `Id`, `YearGraduated`, `Gwa` (string), `Honors`, `Competencies`, `CareerClarity`, `Interest`, `PredictedOutcome`, `Confidence`, `PredictedAt`
+- Database file: `careerpath.db` (auto-created on first run via `EnsureCreated`)
 
 ---
 
@@ -297,26 +316,20 @@ The NVSU official colors are set in `App.razor`:
 - Timeline showing how the system works (3 steps)
 - Disclaimer about predictions being suggestions, not guarantees
 
-#### Predict.razor (`/predict`)
-- **Left column:** Student input form with MudBlazor components
-  - Course dropdown (BSIT/BSCS/BSIS)
-  - Year graduated (numeric)
-  - GWA (numeric, with helper text about PH grading system)
-  - Competencies (multiline text)
-  - Interest (multiline text)
-  - Submit button with loading spinner
-- **Right column:** Result display (appears after submission)
-  - Large colored chip with "ICT-Aligned" or "Non-ICT-Aligned"
-  - Confidence percentage
-  - Two progress bars showing class probabilities
-  - Interpretation text
-  - Similar alumni job chips
-  - Disclaimer
+#### Predict.razor (`/predict`) and the RIASEC Assessment flow
+- The primary entry point is now `RiasecAssessment.razor`, which collects the RIASEC inventory + Career Clarity self-rating and then renders a "Predict My Career Outcome" panel that POSTs the GTS 3 `StudentInput` shape directly to `/api/predict`. The panel collects:
+  - GWA dropdown (`Outstanding` / `Very Satisfactory` / `Satisfactory` / `Fair`)
+  - Honors dropdown (`No Honors` / `Cum Laude` / `Magna Cum Laude` / `Summa Cum Laude`)
+  - Competencies multi-select over the 7 canonical labels (Information Technology Skills, Communication Skills, Problem-Solving Skills, Entrepreneurial Skills, Organizational Skills, Human Relations Skills, Critical Thinking)
+  - `careerClarity` is taken automatically from the assessment's `Clarity.ClarityBucket`
+  - `interest` is taken automatically from the assessment's `DominantCode` (three-letter Holland code)
+  - `yearGraduated` defaults to the current calendar year
+- **Result panel:** badge with `PredictedOutcome`, confidence percentage, two probability bars, interpretation text, and similar-alumni job chips.
 
 #### Dataset.razor (`/dataset`)
 - Total record count badge
-- Filter card: course dropdown + search textbox + filter button
-- MudTable with columns: Name, Year, Course, GWA, Job Position, Field, Career Outcome
+- Filter card: **Honors** dropdown + search textbox + filter button
+- MudTable with columns: Name, Year, GWA, Honors, Career Clarity, Job Title, Field, Career Outcome
 - Pagination controls at the bottom
 
 #### Insights.razor (`/insights`)
@@ -358,16 +371,17 @@ This file contains all DTOs (Data Transfer Objects) shared between the client an
 
 ## 7. How a Prediction Works End-to-End
 
-1. **User fills the form** on the Predict page and clicks "Predict My Career Path"
+1. **User completes the RIASEC assessment**, then fills GWA / Honors / Competencies on the report page and clicks "Predict My Career Outcome"
 
 2. **Blazor serializes** the form into a `StudentInput` JSON object:
    ```json
    {
-     "course": "BSIT",
-     "yearGraduated": 2024,
-     "gwa": 2.5,
-     "competencies": "Technical Skills, Problem Solving",
-     "interest": "Software Development"
+     "yearGraduated": 2026,
+     "gwa": "Very Satisfactory",
+     "honors": "Cum Laude",
+     "competencies": "Information Technology Skills, Problem-Solving Skills",
+     "careerClarity": "High",
+     "interest": "IRC"
    }
    ```
 
@@ -376,21 +390,21 @@ This file contains all DTOs (Data Transfer Objects) shared between the client an
 4. **PredictController** receives the request:
    - Calls `PredictionService.Predict(input)`
    - Calls `DatasetService.FindSimilarAlumniJobs()` for similar alumni
-   - Logs the prediction to SQLite
+   - Logs the prediction to SQLite (writes the new `PredictionLog` shape — no `Course` column)
    - Returns `PredictionResult`
 
 5. **PredictionService.Predict():**
    - Converts `StudentInput` → `StudentFeatures`
    - The ML.NET `PredictionEngine` runs the **full pipeline**:
-     a. One-hot encodes "BSIT" → [1,0,0]
-     b. TF-IDF featurizes "Technical Skills, Problem Solving" → numeric vector
-     c. TF-IDF featurizes "Software Development" → numeric vector
-     d. Concatenates all into one feature vector
-     e. Normalizes to 0-1 range
+     a. One-hot encodes `Gwa` ("Very Satisfactory") and `Honors` ("Cum Laude") and `CareerClarity` ("High")
+     b. TF-IDF featurizes "Information Technology Skills, Problem-Solving Skills" → numeric vector
+     c. TF-IDF featurizes "IRC" → numeric vector
+     d. Concatenates with `YearGraduated` (numeric) into one feature vector
+     e. Normalizes to 0-1 range (min-max)
      f. Runs through the 100-tree Random Forest
      g. Platt calibrator converts the score to a probability
-   - Returns: `PredictedLabel=true`, `Probability=0.72`
-   - Maps to: `PredictedOutcome="ICT-Aligned"`, `Confidence=0.72`
+   - Returns: `PredictedLabel=true`, `Probability=0.78`
+   - Maps to: `PredictedOutcome="ICT-Aligned"`, `Confidence=0.78`
 
 6. **Blazor receives** the JSON response and renders the result panel
 
@@ -404,11 +418,11 @@ Random Forest is an **ensemble method** that builds many decision trees and vote
 ### "Why binary classification instead of 4-class?"
 The original 4 classes ("Core ICT-Related", "ICT-Adjacent", "Non-ICT but Adjacent", "Non-ICT") had very small per-class counts with n=301. Binary classification is more reliable with small datasets and produces more stable metrics. The distinction between "ICT-Adjacent" and "Non-ICT but Adjacent" was ambiguous even in the original labeling.
 
-### "Why is Interest the most important feature?"
-The RIASEC Interest codes directly encode career orientation. A student with code "IRC" (Investigative-Realistic-Conventional) has interests naturally aligned with ICT work. This makes theoretical sense — career interest is the strongest predictor of career choice.
+### "Why are Career Clarity and Interest the most important features?"
+Career Clarity directly encodes how confident the student is about their post-graduation direction, and the RIASEC Interest triplet encodes their broad career orientation. A student with code "IRC" (Investigative-Realistic-Conventional) and `High` Career Clarity has both the orientation and the conviction that align with ICT work. This makes theoretical sense — interest plus clarity is the strongest predictor of career choice. Always read the live percentages from `metrics.json` rather than restating any snapshot.
 
-### "Why ~76% accuracy and not higher?"
-With only 301 records and 5 features (2 of which are short text), 76% is a strong result. The majority-class baseline is 51.5% (predicting "ICT-Aligned" for everyone). Our model improves by 24.5 percentage points over random guessing. Higher accuracy would require more data, more features (e.g., validated psychometric instruments), or both.
+### "Why is the accuracy not higher?"
+The canonical Accuracy / Precision / Recall / F1 / AUC numbers live in `src/CareerPath.Server/MLModel/metrics.json` and should be quoted from there. With only 301 records and 6 features (two of which are short free text and three of which are coarse categoricals), the model substantially outperforms the 51.5% majority-class baseline but is bounded by dataset size and the heavy class imbalance in `Gwa` (~68% "Very Satisfactory") and `Honors` (~83% "No Honors"). Higher accuracy would require more data, more features (e.g. validated psychometric instruments), or both.
 
 ### "What is TF-IDF?"
 **Term Frequency - Inverse Document Frequency**. It converts text into numbers:
@@ -421,7 +435,7 @@ With only 301 records and 5 features (2 of which are short text), 76% is a stron
 FastForest outputs raw scores (not probabilities). **Platt calibration** fits a logistic regression on top of the raw scores to convert them to calibrated probabilities between 0 and 1. This is needed so we can say "72% confidence" instead of just "positive prediction."
 
 ### "What is Permutation Feature Importance?"
-For each feature, we randomly shuffle its values and see how much the model's accuracy drops. If shuffling "Interest" causes accuracy to drop from 76% to 50%, that means Interest is very important. If shuffling "Course" causes no drop, Course is unimportant. This is a model-agnostic technique that works with any classifier.
+For each feature, we randomly shuffle its values and see how much the model's accuracy drops. If shuffling `Interest` causes accuracy to drop sharply, that means Interest is very important. If shuffling `Honors` causes no drop, Honors is unimportant on this split. This is a model-agnostic technique that works with any classifier.
 
 ### "Is this reproducible?"
 Yes. Both `MLContext(seed: 42)` and `TrainTestSplit(seed: 42)` use fixed seeds. Running the trainer again produces exactly the same numbers.
