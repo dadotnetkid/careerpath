@@ -144,6 +144,67 @@ public class CvFoldMetric
     public double Auc { get; set; }
 }
 
+// ── Diagnostic confusion matrices ──
+//
+// The canonical model is binary (ICT-Aligned vs Non-ICT-Aligned). For
+// transparency the Insights dashboard also shows two diagnostic views:
+//
+//   1. 4x2: rows = actual 4-class CareerAlignment, columns = predicted
+//      binary outcome from the canonical model. Computed by running the
+//      binary RF over all 301 alumni and tabulating by actual sub-class.
+//
+//   2. 4x4: rows = actual 4-class CareerAlignment, columns = predicted
+//      4-class CareerAlignment. Requires a SEPARATE multiclass model
+//      (model_4class.zip) trained alongside the binary one for diagnostic
+//      purposes. Evaluated on the same 80/20 test fold (seed=42).
+//
+// The 4-class "Non-ICT" group has only 6 rows (~1 in the test fold), so
+// the 4x4 is exploratory. The Insights page must surface this caveat.
+
+public class DiagnosticConfusionMatrices
+{
+    public DateTime ComputedAt { get; set; }
+
+    public ConfusionMatrix4x2 BinaryByActual4Class { get; set; } = new();
+
+    public ConfusionMatrix4x4 Multiclass4x4 { get; set; } = new();
+
+    /// <summary>4-class accuracy of the diagnostic multiclass model on the test fold.</summary>
+    public double Multiclass4ClassAccuracy { get; set; }
+
+    /// <summary>Macro-averaged F1 across the 4 classes.</summary>
+    public double Multiclass4ClassMacroF1 { get; set; }
+
+    public int Multiclass4ClassTrainRows { get; set; }
+    public int Multiclass4ClassTestRows { get; set; }
+}
+
+public class ConfusionMatrix4x2
+{
+    /// <summary>4 actual labels, in this canonical order: Core ICT, ICT-Adjacent, Non-ICT but Adjacent, Non-ICT.</summary>
+    public List<string> ActualLabels { get; set; } = new();
+
+    /// <summary>2 predicted labels: ICT-Aligned, Non-ICT-Aligned.</summary>
+    public List<string> PredictedLabels { get; set; } = new();
+
+    /// <summary>[4][2] count matrix.</summary>
+    public int[][] Counts { get; set; } = Array.Empty<int[]>();
+
+    /// <summary>Row totals (n per actual class) for percentage display.</summary>
+    public int[] RowTotals { get; set; } = Array.Empty<int>();
+}
+
+public class ConfusionMatrix4x4
+{
+    /// <summary>4 labels, in this canonical order: Core ICT, ICT-Adjacent, Non-ICT but Adjacent, Non-ICT.</summary>
+    public List<string> Labels { get; set; } = new();
+
+    /// <summary>[4][4] count matrix. Rows = actual, columns = predicted.</summary>
+    public int[][] Counts { get; set; } = Array.Empty<int[]>();
+
+    public int[] RowTotals { get; set; } = Array.Empty<int>();
+}
+
 // API response shape — same as the DB row plus the fold breakout.
 public class TrainingRunDto
 {

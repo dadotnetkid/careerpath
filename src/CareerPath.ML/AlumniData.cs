@@ -63,6 +63,33 @@ public class CareerOutcomePrediction
     public float Probability { get; set; }
 }
 
+// ── Diagnostic 4-class CareerAlignment Prediction ──
+//
+// Trained as a SECONDARY model alongside the binary one (model_4class.zip).
+// Used only for the Insights diagnostic 4×4 confusion matrix. Not consumed
+// by /api/predict — that still uses the canonical binary model.
+public class CareerAlignment4ClassFeatures
+{
+    public float YearGraduated { get; set; }
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
+    public string Competencies { get; set; } = "";
+    public string CareerClarity { get; set; } = "";
+    public string Interest { get; set; } = "";
+
+    /// <summary>Full 4-class label: "Core ICT" | "ICT-Adjacent" | "Non-ICT but Adjacent" | "Non-ICT"</summary>
+    public string Label { get; set; } = "";
+}
+
+public class CareerAlignment4ClassPrediction
+{
+    [ColumnName("PredictedLabel")]
+    public string PredictedLabel { get; set; } = "";
+
+    [ColumnName("Score")]
+    public float[] Score { get; set; } = Array.Empty<float>();
+}
+
 // ── Multiclass RIASEC Prediction ──
 //
 // Predicts the dominant RIASEC dimension (R/I/A/S/E/C) from profile features.
