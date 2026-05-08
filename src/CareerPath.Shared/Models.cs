@@ -87,10 +87,82 @@ public class DatasetSummary
     public Dictionary<string, int> ByGwa { get; set; } = new();
     public Dictionary<string, int> ByHonors { get; set; } = new();
     public Dictionary<string, int> ByCareerOutcome { get; set; } = new();
+
+    /// <summary>4-class breakdown: "Core ICT" / "ICT-Adjacent" / "Non-ICT but Adjacent" / "Non-ICT".</summary>
+    public Dictionary<string, int> ByCareerAlignment { get; set; } = new();
+
     public Dictionary<string, int> ByCareerClarity { get; set; } = new();
     public Dictionary<string, int> ByEmploymentStatus { get; set; } = new();
     public Dictionary<string, int> ByRiasecDominant { get; set; } = new();
     public Dictionary<int, int> ByYear { get; set; } = new();
+
+    /// <summary>
+    /// Cross-tab: outer key = RiasecDominant full name (Conventional/Investigative/...),
+    /// inner key = FieldOfIndustry, value = count. Used by Insights to show that
+    /// RIASEC dimensions map to industries the dataset reflects (sanity check).
+    /// </summary>
+    public Dictionary<string, Dictionary<string, int>> ByFieldIndustryByRiasec { get; set; } = new();
+}
+
+// ── Cross-validation metrics (10-fold, 20-fold) ──
+//
+// Written to MLModel/cv_metrics.json by the trainer; ingested into the SQLite
+// DB on server startup; surfaced in the Insights "CV Stability" section.
+
+public class CrossValidationReport
+{
+    /// <summary>e.g. "alumni_gts3.csv@2026-05-08"</summary>
+    public string DatasetVersion { get; set; } = "";
+    public DateTime TrainedAt { get; set; }
+    public List<CvAlgorithmRun> Runs { get; set; } = new();
+}
+
+public class CvAlgorithmRun
+{
+    public string Algorithm { get; set; } = "";   // "Random Forest" / "Decision Tree" / "Logistic Regression"
+    public int FoldCount { get; set; }            // 10 or 20
+    public double MeanAccuracy { get; set; }
+    public double StdAccuracy { get; set; }
+    public double MeanPrecision { get; set; }
+    public double StdPrecision { get; set; }
+    public double MeanRecall { get; set; }
+    public double StdRecall { get; set; }
+    public double MeanF1 { get; set; }
+    public double StdF1 { get; set; }
+    public double MeanAuc { get; set; }
+    public double StdAuc { get; set; }
+    public List<CvFoldMetric> Folds { get; set; } = new();
+}
+
+public class CvFoldMetric
+{
+    public int FoldIndex { get; set; }
+    public double Accuracy { get; set; }
+    public double Precision { get; set; }
+    public double Recall { get; set; }
+    public double F1 { get; set; }
+    public double Auc { get; set; }
+}
+
+// API response shape — same as the DB row plus the fold breakout.
+public class TrainingRunDto
+{
+    public int Id { get; set; }
+    public string Algorithm { get; set; } = "";
+    public int FoldCount { get; set; }
+    public double MeanAccuracy { get; set; }
+    public double StdAccuracy { get; set; }
+    public double MeanPrecision { get; set; }
+    public double StdPrecision { get; set; }
+    public double MeanRecall { get; set; }
+    public double StdRecall { get; set; }
+    public double MeanF1 { get; set; }
+    public double StdF1 { get; set; }
+    public double MeanAuc { get; set; }
+    public double StdAuc { get; set; }
+    public DateTime TrainedAt { get; set; }
+    public string DatasetVersion { get; set; } = "";
+    public List<CvFoldMetric> Folds { get; set; } = new();
 }
 
 public class AlumniRecord
