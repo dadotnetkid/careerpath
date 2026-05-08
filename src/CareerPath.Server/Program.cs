@@ -23,11 +23,13 @@ string ResolveContentPath(string relativeFromBase, string relativeFromSolution)
 var csvPath = ResolveContentPath(Path.Combine("data", "alumni_gts3.csv"), Path.Combine("data", "alumni_gts3.csv"));
 var modelPath = ResolveContentPath(Path.Combine("MLModel", "model.zip"), Path.Combine("src", "CareerPath.Server", "MLModel", "model.zip"));
 var metricsPath = ResolveContentPath(Path.Combine("MLModel", "metrics.json"), Path.Combine("src", "CareerPath.Server", "MLModel", "metrics.json"));
+var cvMetricsPath = ResolveContentPath(Path.Combine("MLModel", "cv_metrics.json"), Path.Combine("src", "CareerPath.Server", "MLModel", "cv_metrics.json"));
 
 Console.WriteLine($"Base dir: {baseDir}");
 Console.WriteLine($"CSV path: {csvPath} (exists: {File.Exists(csvPath)})");
 Console.WriteLine($"Model path: {modelPath} (exists: {File.Exists(modelPath)})");
 Console.WriteLine($"Metrics path: {metricsPath} (exists: {File.Exists(metricsPath)})");
+Console.WriteLine($"CV metrics path: {cvMetricsPath} (exists: {File.Exists(cvMetricsPath)})");
 
 builder.Configuration["MLModel:MetricsPath"] = metricsPath;
 
@@ -60,6 +62,10 @@ var openAiService = new OpenAiService(openAiKey, openAiModel);
 builder.Services.AddSingleton(openAiService);
 builder.Services.AddSingleton(new RiasecService(openAiService, datasetService));
 
+// CV training history ingest + query service. Singleton is fine — the service
+// holds no state and uses the AppDbContext passed into each call.
+builder.Services.AddSingleton<TrainingHistoryService>();
+
 var app = builder.Build();
 
 // Ensure DB is created. If the AppPool identity lacks write permission, log and
@@ -69,6 +75,28 @@ try
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+
+    // Best-effort ingest of any cv_metrics.json the trainer has written. The
+    // file may not exist yet (Agent E's trainer may not have run) — that's OK.
+    // IngestAsync swallows its own errors, but we wrap belt-and-suspenders too.
+    if (File.Exists(cvMetricsPath))
+    {
+        try
+        {
+            var historySvc = scope.ServiceProvider.GetRequiredService<TrainingHistoryService>();
+            // Synchronous wait is fine here — startup is single-threaded and this
+            // table is tiny (≤6 rows per training run).
+            historySvc.IngestAsync(cvMetricsPath, db).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"CV ingest failed: {ex.Message}");
+        }
+    }
+    else
+    {
+        Console.WriteLine($"CV metrics file not found at {cvMetricsPath} — skipping ingest (run `dotnet run --project src/CareerPath.ML` to generate).");
+    }
 }
 catch (Exception ex)
 {

@@ -3,6 +3,11 @@
 
 <PageTitle>Model Insights</PageTitle>
 
+@{
+    // RIASEC dimension order — fixed for the cross-tab table.
+    var riasecOrder = new[] { "Realistic", "Investigative", "Artistic", "Social", "Enterprising", "Conventional" };
+}
+
 <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
     Model Insights
 </MudText>
@@ -164,6 +169,288 @@ else if (comparison != null)
         </MudCardContent>
     </MudCard>
 
+    @* ── Section A: Cross-Validation Stability ── *@
+    <MudCard Elevation="3" Class="mb-6">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">Cross-Validation Stability (10-fold and 20-fold)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                The 80/20 split above is the canonical model selection method. Cross-validation
+                metrics (mean ± standard deviation across folds) are reported here as stability
+                evidence — they show whether the headline accuracy is robust to test-fold composition.
+            </MudText>
+
+            @if (cvRuns == null || cvRuns.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    Cross-validation metrics not yet available — run
+                    <code>dotnet run --project src/CareerPath.ML</code>
+                    to generate them, then restart the server to ingest.
+                </MudAlert>
+            }
+            else
+            {
+                <MudGrid Spacing="3">
+                    @foreach (var run in OrderCvRuns(cvRuns))
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="2" Style="border-radius:10px; overflow:hidden;">
+                                <div style="background:#007F3B; color:#fff; padding:10px 16px;">
+                                    <MudText Typo="Typo.subtitle1" Style="font-family:'Source Serif 4',serif; font-weight:600;">
+                                        @run.Algorithm — @run.FoldCount-fold
+                                    </MudText>
+                                </div>
+                                <div class="pa-4">
+                                    @* Big mean accuracy number *@
+                                    <div class="d-flex align-baseline mb-3" style="gap:10px;">
+                                        <MudText Typo="Typo.h3" Color="Color.Primary"
+                                                 Style="font-family:'Source Serif 4',serif; font-weight:700; line-height:1;">
+                                            @((run.MeanAccuracy * 100).ToString("F1"))%
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            ± @((run.StdAccuracy * 100).ToString("F1"))%
+                                        </MudText>
+                                    </div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                             Style="text-transform:uppercase; letter-spacing:1px; display:block;"
+                                             Class="mb-2">
+                                        Per-fold accuracy
+                                    </MudText>
+
+                                    @* Per-fold mini-bar chart *@
+                                    <div style="display:flex; align-items:flex-end; gap:2px; height:40px; margin-bottom:16px;">
+                                        @if (run.Folds is { Count: > 0 })
+                                        {
+                                            @foreach (var fold in run.Folds.OrderBy(f => f.FoldIndex))
+                                            {
+                                                var pct = Math.Max(0, Math.Min(100, fold.Accuracy * 100));
+                                                <div title="@($"Fold {fold.FoldIndex + 1}: {fold.Accuracy:P2}")"
+                                                     style="flex:1; height:100%; display:flex; align-items:flex-end;">
+                                                    <div style="width:100%; height:@(pct.ToString("F1"))%; background:#007F3B; border-radius:2px 2px 0 0; min-height:2px;"></div>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+
+                                    @* 4 small stats *@
+                                    <MudGrid Spacing="1">
+                                        <MudItem xs="3">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                                     Style="text-transform:uppercase; letter-spacing:0.5px; display:block;">
+                                                Precision
+                                            </MudText>
+                                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                                @((run.MeanPrecision * 100).ToString("F1"))% ± @((run.StdPrecision * 100).ToString("F1"))%
+                                            </MudText>
+                                        </MudItem>
+                                        <MudItem xs="3">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                                     Style="text-transform:uppercase; letter-spacing:0.5px; display:block;">
+                                                Recall
+                                            </MudText>
+                                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                                @((run.MeanRecall * 100).ToString("F1"))% ± @((run.StdRecall * 100).ToString("F1"))%
+                                            </MudText>
+                                        </MudItem>
+                                        <MudItem xs="3">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                                     Style="text-transform:uppercase; letter-spacing:0.5px; display:block;">
+                                                F1
+                                            </MudText>
+                                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                                @((run.MeanF1 * 100).ToString("F1"))% ± @((run.StdF1 * 100).ToString("F1"))%
+                                            </MudText>
+                                        </MudItem>
+                                        <MudItem xs="3">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                                     Style="text-transform:uppercase; letter-spacing:0.5px; display:block;">
+                                                AUC
+                                            </MudText>
+                                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                                @((run.MeanAuc * 100).ToString("F1"))% ± @((run.StdAuc * 100).ToString("F1"))%
+                                            </MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudCardContent>
+    </MudCard>
+
+    @* ── Section B: Career Alignment Breakdown (4-class) ── *@
+    <MudCard Elevation="3" Class="mb-6">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">Career Alignment Breakdown (4-class)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                The dataset is labelled with four career-alignment categories. The binary classifier
+                collapses these into ICT-Aligned vs. Non-ICT-Aligned (rule shown below).
+            </MudText>
+
+            @{
+                var ca = summary?.ByCareerAlignment ?? new Dictionary<string, int>();
+                int caCoreIct = ca.TryGetValue("Core ICT", out var v1) ? v1 : 0;
+                int caIctAdj  = ca.TryGetValue("ICT-Adjacent", out var v2) ? v2 : 0;
+                int caNonIctAdj = ca.TryGetValue("Non-ICT but Adjacent", out var v3) ? v3 : 0;
+                int caNonIct  = ca.TryGetValue("Non-ICT", out var v4) ? v4 : 0;
+                int caTotal   = caCoreIct + caIctAdj + caNonIctAdj + caNonIct;
+
+                var co = summary?.ByCareerOutcome ?? new Dictionary<string, int>();
+                int coIct = co.TryGetValue("ICT-Aligned", out var c1) ? c1 : (caCoreIct + caIctAdj);
+                int coNon = co.TryGetValue("Non-ICT-Aligned", out var c2) ? c2 : (caNonIctAdj + caNonIct);
+                int coTotal = coIct + coNon;
+
+                var rows = new[]
+                {
+                    new { Label = "Core ICT",            Count = caCoreIct,   Color = "#0a5d2e" },
+                    new { Label = "ICT-Adjacent",        Count = caIctAdj,    Color = "#007F3B" },
+                    new { Label = "Non-ICT but Adjacent", Count = caNonIctAdj, Color = "#FFD700" },
+                    new { Label = "Non-ICT",             Count = caNonIct,    Color = "#6c757d" }
+                };
+            }
+
+            @if (caTotal == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    Career alignment breakdown not yet populated.
+                </MudAlert>
+            }
+            else
+            {
+                @foreach (var row in rows)
+                {
+                    var pct = caTotal > 0 ? (row.Count * 100.0 / caTotal) : 0;
+                    <div class="d-flex align-center mb-3" style="gap:12px;">
+                        <MudText Typo="Typo.body2" Style="width:180px; text-align:right; font-weight:500; flex-shrink:0;">
+                            @row.Label
+                        </MudText>
+                        <div style="flex:1; height:28px; background:#f1f3f5; border-radius:6px; overflow:hidden; position:relative;">
+                            <div style="height:100%; width:@(pct.ToString("F2"))%; background:@row.Color; border-radius:6px 0 0 6px;"></div>
+                        </div>
+                        <MudText Typo="Typo.body2" Style="width:120px; font-weight:700; flex-shrink:0;">
+                            @row.Count (@pct.ToString("F1")%)
+                        </MudText>
+                    </div>
+                }
+
+                <MudPaper Elevation="0" Class="pa-3 mt-4" Style="background:#f8f9fa; border-radius:8px;">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary"
+                             Style="text-transform:uppercase; letter-spacing:1px; display:block;"
+                             Class="mb-2">
+                        Binary collapse rule
+                    </MudText>
+                    @{
+                        double ictPct = coTotal > 0 ? coIct * 100.0 / coTotal : 0;
+                        double nonPct = coTotal > 0 ? coNon * 100.0 / coTotal : 0;
+                    }
+                    <MudText Typo="Typo.body2" Class="mb-1">
+                        Core ICT (@caCoreIct) + ICT-Adjacent (@caIctAdj)
+                        → <strong>ICT-Aligned</strong> (@coIct, @ictPct.ToString("F1")%)
+                    </MudText>
+                    <MudText Typo="Typo.body2">
+                        Non-ICT but Adjacent (@caNonIctAdj) + Non-ICT (@caNonIct)
+                        → <strong>Non-ICT-Aligned</strong> (@coNon, @nonPct.ToString("F1")%)
+                    </MudText>
+                </MudPaper>
+            }
+        </MudCardContent>
+    </MudCard>
+
+    @* ── Section C: RIASEC × Industry Cross-tab ── *@
+    <MudCard Elevation="3" Class="mb-6">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">RIASEC × Industry Cross-tab (sanity check)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                This cross-tab confirms that the RIASEC dimensions in the assessment correspond to actual
+                industry placements observed in the dataset. Investigative and Realistic alumni concentrate
+                in technology and engineering; Conventional alumni concentrate in administrative and
+                government roles.
+            </MudText>
+
+            @{
+                var crossTab = summary?.ByFieldIndustryByRiasec ?? new Dictionary<string, Dictionary<string, int>>();
+
+                // Compute top-8 industries across all RIASEC dimensions.
+                var industryTotals = new Dictionary<string, int>();
+                foreach (var ctInner in crossTab.Values)
+                {
+                    foreach (var kv in ctInner)
+                    {
+                        if (string.IsNullOrWhiteSpace(kv.Key)) continue;
+                        industryTotals.TryGetValue(kv.Key, out var existing);
+                        industryTotals[kv.Key] = existing + kv.Value;
+                    }
+                }
+                var topIndustries = industryTotals
+                    .OrderByDescending(kv => kv.Value)
+                    .Take(8)
+                    .Select(kv => kv.Key)
+                    .ToList();
+
+                int maxCount = 1;
+                foreach (var dim in riasecOrder)
+                {
+                    if (!crossTab.TryGetValue(dim, out var dimInner)) continue;
+                    foreach (var ind in topIndustries)
+                    {
+                        if (dimInner.TryGetValue(ind, out var c) && c > maxCount) maxCount = c;
+                    }
+                }
+            }
+
+            @if (crossTab.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    RIASEC × Industry cross-tab not yet populated.
+                </MudAlert>
+            }
+            else
+            {
+                <div style="overflow-x:auto;">
+                    <MudTable T="string" Items="@riasecOrder" Hover="true" Bordered="true" Dense="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh Style="background:#007F3B; color:#fff;">RIASEC Dimension</MudTh>
+                            @foreach (var ind in topIndustries)
+                            {
+                                <MudTh Style="background:#007F3B; color:#fff; text-align:center;">@ind</MudTh>
+                            }
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd Style="font-weight:600;">@context</MudTd>
+                            @{
+                                crossTab.TryGetValue(context, out var inner);
+                            }
+                            @foreach (var ind in topIndustries)
+                            {
+                                int cell = (inner != null && inner.TryGetValue(ind, out var v)) ? v : 0;
+                                double alpha = maxCount > 0 ? (cell / (double)maxCount) * 0.4 : 0;
+                                var bg = cell > 0
+                                    ? $"background-color: rgba(0,127,59,{alpha.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)});"
+                                    : "";
+                                <MudTd Style="@($"text-align:center; {bg}")">
+                                    @(cell > 0 ? cell.ToString() : "—")
+                                </MudTd>
+                            }
+                        </RowTemplate>
+                    </MudTable>
+                </div>
+            }
+        </MudCardContent>
+    </MudCard>
+
     @* Training Info *@
     <MudCard Elevation="2" Class="mb-4">
         <MudCardContent>
@@ -193,6 +480,8 @@ else if (comparison != null)
 @code {
     private ModelComparison? comparison;
     private ModelMetrics? bestModel;
+    private DatasetSummary? summary;
+    private List<TrainingRunDto>? cvRuns;
     private bool isLoading = true;
     private bool notTrained;
 
@@ -217,10 +506,36 @@ else if (comparison != null)
         {
             notTrained = true;
         }
-        finally
+
+        // Dataset summary — used by Sections B and C. Failure should not block the page.
+        try
         {
-            isLoading = false;
+            summary = await Http.GetFromJsonAsync<DatasetSummary>("api/dataset/summary");
         }
+        catch
+        {
+            summary = null;
+        }
+
+        // Cross-validation runs — endpoint may 404 or return empty if trainer not yet run.
+        try
+        {
+            var cvResponse = await Http.GetAsync("api/training/latest");
+            if (cvResponse.IsSuccessStatusCode)
+            {
+                cvRuns = await cvResponse.Content.ReadFromJsonAsync<List<TrainingRunDto>>();
+            }
+            else
+            {
+                cvRuns = new List<TrainingRunDto>();
+            }
+        }
+        catch
+        {
+            cvRuns = new List<TrainingRunDto>();
+        }
+
+        isLoading = false;
     }
 
     private List<ModelMetrics> GetModelsRanked()
@@ -232,5 +547,21 @@ else if (comparison != null)
             comparison.DecisionTree,
             comparison.LogisticRegression
         }.OrderByDescending(m => m.Accuracy).ToList();
+    }
+
+    // Order CV cards as: RF 10, RF 20, DT 10, DT 20, LR 10, LR 20.
+    private static List<TrainingRunDto> OrderCvRuns(List<TrainingRunDto> runs)
+    {
+        int AlgoOrder(string a) => a switch
+        {
+            "Random Forest" => 0,
+            "Decision Tree" => 1,
+            "Logistic Regression" => 2,
+            _ => 99
+        };
+        return runs
+            .OrderBy(r => AlgoOrder(r.Algorithm))
+            .ThenBy(r => r.FoldCount)
+            .ToList();
     }
 }

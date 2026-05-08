@@ -269,6 +269,135 @@ public class CareerPathTrainer
         var model = _mlContext.Model.Load(modelPath, out _);
         return _mlContext.Model.CreatePredictionEngine<StudentFeatures, CareerOutcomePrediction>(model);
     }
+
+    /// <summary>
+    /// Runs 10-fold and 20-fold cross-validation for RF, DT, and LR (same hyperparameters
+    /// as <see cref="TrainAll"/>). Returns a <see cref="CrossValidationReport"/> with six
+    /// <see cref="CvAlgorithmRun"/>s — one per (algorithm × foldCount) combo. Per-fold metrics
+    /// (Accuracy / PositivePrecision / PositiveRecall / F1 / AUC) are summarized as mean and
+    /// sample (Bessel-corrected, n-1) standard deviation.
+    ///
+    /// CV is reported as stability validation only — the canonical model selection metric
+    /// remains the 80/20 split produced by <see cref="TrainAll"/>.
+    /// </summary>
+    public CrossValidationReport CrossValidate(string csvPath)
+    {
+        var data = LoadData(csvPath);
+
+        var algorithms = new (string Name, IEstimator<ITransformer> Trainer)[]
+        {
+            ("Random Forest", BuildRfTrainerWithCalibrator()),
+            ("Decision Tree", _mlContext.BinaryClassification.Trainers.FastTree(
+                labelColumnName: "Label",
+                featureColumnName: "Features",
+                numberOfTrees: 1,
+                numberOfLeaves: 20,
+                minimumExampleCountPerLeaf: 5,
+                learningRate: 1.0)),
+            ("Logistic Regression", _mlContext.BinaryClassification.Trainers.LbfgsLogisticRegression(
+                labelColumnName: "Label",
+                featureColumnName: "Features"))
+        };
+
+        var foldCounts = new[] { 10, 20 };
+        var runs = new List<CvAlgorithmRun>(algorithms.Length * foldCounts.Length);
+
+        foreach (var (algoName, trainer) in algorithms)
+        {
+            foreach (var foldCount in foldCounts)
+            {
+                Console.WriteLine($"\n--- Cross-Validating {algoName} ({foldCount}-fold) ---");
+
+                var pipeline = BuildFeaturePipeline().Append(trainer);
+                var cvResults = _mlContext.BinaryClassification.CrossValidate(
+                    data,
+                    pipeline,
+                    numberOfFolds: foldCount,
+                    labelColumnName: "Label",
+                    samplingKeyColumnName: null,
+                    seed: 42);
+
+                var folds = new List<CvFoldMetric>(cvResults.Count);
+                int idx = 0;
+                foreach (var r in cvResults)
+                {
+                    folds.Add(new CvFoldMetric
+                    {
+                        FoldIndex = r.Fold >= 0 ? r.Fold : idx,
+                        Accuracy = r.Metrics.Accuracy,
+                        Precision = r.Metrics.PositivePrecision,
+                        Recall = r.Metrics.PositiveRecall,
+                        F1 = r.Metrics.F1Score,
+                        Auc = r.Metrics.AreaUnderRocCurve
+                    });
+                    idx++;
+                }
+
+                var run = new CvAlgorithmRun
+                {
+                    Algorithm = algoName,
+                    FoldCount = foldCount,
+                    MeanAccuracy = Mean(folds, f => f.Accuracy),
+                    StdAccuracy = SampleStdDev(folds, f => f.Accuracy),
+                    MeanPrecision = Mean(folds, f => f.Precision),
+                    StdPrecision = SampleStdDev(folds, f => f.Precision),
+                    MeanRecall = Mean(folds, f => f.Recall),
+                    StdRecall = SampleStdDev(folds, f => f.Recall),
+                    MeanF1 = Mean(folds, f => f.F1),
+                    StdF1 = SampleStdDev(folds, f => f.F1),
+                    MeanAuc = Mean(folds, f => f.Auc),
+                    StdAuc = SampleStdDev(folds, f => f.Auc),
+                    Folds = folds
+                };
+
+                Console.WriteLine($"  Mean Accuracy: {run.MeanAccuracy:P2} (± {run.StdAccuracy:P2})");
+                Console.WriteLine($"  Mean F1:       {run.MeanF1:P2} (± {run.StdF1:P2})");
+                Console.WriteLine($"  Mean AUC:      {run.MeanAuc:P2} (± {run.StdAuc:P2})");
+
+                runs.Add(run);
+            }
+        }
+
+        return new CrossValidationReport
+        {
+            DatasetVersion = $"alumni_gts3.csv@{File.GetLastWriteTimeUtc(csvPath):yyyy-MM-dd}",
+            TrainedAt = DateTime.UtcNow,
+            Runs = runs
+        };
+    }
+
+    /// <summary>
+    /// RF + Platt calibrator wrapped as a single estimator so the CV pipeline can
+    /// append it just like <see cref="TrainAll"/> does.
+    /// </summary>
+    private IEstimator<ITransformer> BuildRfTrainerWithCalibrator()
+    {
+        var rfTrainer = _mlContext.BinaryClassification.Trainers.FastForest(
+            labelColumnName: "Label",
+            featureColumnName: "Features",
+            numberOfTrees: 100,
+            numberOfLeaves: 20,
+            minimumExampleCountPerLeaf: 5);
+        var calibrator = _mlContext.BinaryClassification.Calibrators.Platt(labelColumnName: "Label");
+        return rfTrainer.Append(calibrator);
+    }
+
+    private static double Mean(IReadOnlyList<CvFoldMetric> folds, Func<CvFoldMetric, double> selector)
+    {
+        if (folds.Count == 0) return 0;
+        // Filter NaN values that ML.NET sometimes emits when a fold has zero positives/negatives.
+        var values = folds.Select(selector).Where(v => !double.IsNaN(v)).ToList();
+        return values.Count == 0 ? 0 : values.Average();
+    }
+
+    private static double SampleStdDev(IReadOnlyList<CvFoldMetric> folds, Func<CvFoldMetric, double> selector)
+    {
+        var values = folds.Select(selector).Where(v => !double.IsNaN(v)).ToList();
+        if (values.Count < 2) return 0;
+        var mean = values.Average();
+        var sumSquaredDeviations = values.Sum(v => (v - mean) * (v - mean));
+        return Math.Sqrt(sumSquaredDeviations / (values.Count - 1));
+    }
 }
 
 public class LabelOutput

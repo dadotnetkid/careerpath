@@ -8,7 +8,7 @@
     "AreaUnderRocCurve": 0.8111658456486043,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T08:58:10.4247718Z",
+    "TrainedAt": "2026-05-08T10:17:42.0063039Z",
     "ConfusionMatrix": [
       [
         21,
@@ -59,7 +59,7 @@
     "AreaUnderRocCurve": 0.80623973727422,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T08:58:13.3774288Z",
+    "TrainedAt": "2026-05-08T10:17:42.6431761Z",
     "ConfusionMatrix": [
       [
         22,
@@ -107,10 +107,10 @@
     "Precision": 0.75,
     "Recall": 0.8275862068965517,
     "F1Score": 0.7868852459016394,
-    "AreaUnderRocCurve": 0.7898193760262726,
+    "AreaUnderRocCurve": 0.7914614121510674,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T08:58:14.7554193Z",
+    "TrainedAt": "2026-05-08T10:17:43.1051814Z",
     "ConfusionMatrix": [
       [
         24,
@@ -128,15 +128,15 @@
     "FeatureImportances": [
       {
         "FeatureName": "CareerClarity",
-        "Importance": 42.86
+        "Importance": 43.24
       },
       {
         "FeatureName": "Interest",
-        "Importance": 42.86
+        "Importance": 42.34
       },
       {
         "FeatureName": "Competencies",
-        "Importance": 14.29
+        "Importance": 14.41
       },
       {
         "FeatureName": "YearGraduated",

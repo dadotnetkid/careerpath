@@ -62,6 +62,10 @@ public class DatasetService
                 .ToDictionary(g => g.Key, g => g.Count()),
             ByCareerOutcome = _records.GroupBy(r => r.CareerOutcome)
                 .ToDictionary(g => g.Key, g => g.Count()),
+            ByCareerAlignment = _records
+                .GroupBy(r => r.CareerAlignment)
+                .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+                .ToDictionary(g => g.Key, g => g.Count()),
             ByCareerClarity = _records.GroupBy(r => r.CareerClarity)
                 .ToDictionary(g => g.Key, g => g.Count()),
             ByEmploymentStatus = _records.GroupBy(r => r.EmploymentStatus)
@@ -69,7 +73,14 @@ public class DatasetService
             ByRiasecDominant = _records.GroupBy(r => r.RiasecDominant)
                 .ToDictionary(g => g.Key, g => g.Count()),
             ByYear = _records.GroupBy(r => r.YearGraduated)
-                .ToDictionary(g => g.Key, g => g.Count())
+                .ToDictionary(g => g.Key, g => g.Count()),
+            ByFieldIndustryByRiasec = _records
+                .Where(r => !string.IsNullOrWhiteSpace(r.RiasecDominant) && !string.IsNullOrWhiteSpace(r.FieldOfIndustry))
+                .GroupBy(r => r.RiasecDominant)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(x => x.FieldOfIndustry).ToDictionary(gg => gg.Key, gg => gg.Count())
+                )
         };
     }
 

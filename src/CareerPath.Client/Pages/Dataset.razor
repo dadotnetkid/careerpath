@@ -71,6 +71,7 @@
             <MudTh>Interest</MudTh>
             <MudTh>Job Title</MudTh>
             <MudTh>Field of Industry</MudTh>
+            <MudTh>Career Alignment</MudTh>
             <MudTh>Career Outcome</MudTh>
         </HeaderContent>
         <RowTemplate>
@@ -91,6 +92,11 @@
             <MudTd><strong>@context.Interest</strong></MudTd>
             <MudTd>@context.JobTitle</MudTd>
             <MudTd>@context.FieldOfIndustry</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@GetAlignmentColor(context.CareerAlignment)">
+                    @context.CareerAlignment
+                </MudChip>
+            </MudTd>
             <MudTd>
                 <MudChip T="string" Size="Size.Small"
                          Color="@(context.CareerOutcome == "ICT-Aligned" ? Color.Primary : Color.Info)">
@@ -166,6 +172,15 @@
         "High" => Color.Success,
         "Medium" => Color.Warning,
         "Low" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static Color GetAlignmentColor(string alignment) => alignment switch
+    {
+        "Core ICT" => Color.Success,
+        "ICT-Adjacent" => Color.Primary,
+        "Non-ICT but Adjacent" => Color.Warning,
+        "Non-ICT" => Color.Default,
         _ => Color.Default
     };
 }
