@@ -1,8 +1,22 @@
 @page "/dataset"
 @inject HttpClient Http
+@inject CareerPath.Client.Services.AuthService Auth
+@implements IDisposable
 
 <PageTitle>Dataset - Alumni Records</PageTitle>
 
+@if (!Auth.IsAuthenticated)
+{
+    <MudPaper Class="pa-6 mt-6 mx-auto" Elevation="0" Style="max-width:720px; text-align:center; border:1px solid #e0e0e0; border-radius:12px;">
+        <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h5" Class="mt-2 mb-2" Style="font-family:'Source Serif 4',serif;">Researcher Sign-in Required</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">
+            This page contains researcher-facing analytics. Please sign in via the button in the upper right.
+        </MudText>
+    </MudPaper>
+}
+else
+{
 <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
     Alumni Dataset
 </MudText>
@@ -115,6 +129,7 @@
         </PagerContent>
     </MudTable>
 }
+} @* end auth gate *@
 
 <style>
     .gap-2 { gap: 8px; }
@@ -129,9 +144,34 @@
     private string selectedHonors = "";
     private string searchText = "";
     private int totalPages => records == null ? 1 : Math.Max(1, (int)Math.Ceiling((double)records.Total / pageSize));
+    private bool _authSubscribed = false;
+
+    public void Dispose()
+    {
+        if (_authSubscribed)
+        {
+            Auth.AuthStateChanged -= OnAuthChanged;
+            _authSubscribed = false;
+        }
+    }
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
 
     protected override async Task OnInitializedAsync()
     {
+        await Auth.RefreshAsync();
+
+        if (!Auth.IsAuthenticated)
+        {
+            if (!_authSubscribed)
+            {
+                Auth.AuthStateChanged += OnAuthChanged;
+                _authSubscribed = true;
+            }
+            isLoading = false;
+            return;
+        }
+
         summary = await Http.GetFromJsonAsync<DatasetSummary>("api/dataset/summary");
         await LoadData();
     }

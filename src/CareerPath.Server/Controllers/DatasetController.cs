@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using CareerPath.Server.Services;
 using CareerPath.Shared;
@@ -6,6 +7,7 @@ using System.Text.Json;
 namespace CareerPath.Server.Controllers;
 
 [ApiController]
+[Authorize]
 public class DatasetController : ControllerBase
 {
     private readonly DatasetService _datasetService;

@@ -1,11 +1,13 @@
 using CareerPath.Server.Data;
 using CareerPath.Server.Services;
 using CareerPath.Shared;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CareerPath.Server.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/training")]
 public class TrainingHistoryController : ControllerBase
 {

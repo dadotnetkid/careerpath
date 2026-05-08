@@ -1,4 +1,7 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthService Auth
+@inject IDialogService DialogService
 
 <MudLayout>
     <MudAppBar Elevation="3" Dense="false" Style="background: linear-gradient(135deg, #007F3B 0%, #005a2a 100%);">
@@ -17,6 +20,40 @@
         <MudChip T="string" Size="Size.Small" Style="background:rgba(255,255,255,0.15); color:#FFD701; font-weight:600;">
             NVSU CITE
         </MudChip>
+
+        @* Auth control: Sign-In button when anonymous, account menu when signed in. *@
+        @if (Auth.IsAuthenticated)
+        {
+            <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-2">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               StartIcon="@Icons.Material.Filled.AccountCircle"
+                               EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                               Style="color:#fff; text-transform:none;">
+                        <span style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                            @Auth.Email
+                        </span>
+                    </MudButton>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="HandleLogout">
+                        Sign Out
+                    </MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+        else
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Login"
+                       Color="Color.Inherit"
+                       Variant="Variant.Text"
+                       OnClick="OpenLogin"
+                       Style="color:#fff; text-transform:none;"
+                       Class="ml-2">
+                Sign In
+            </MudButton>
+        }
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Variant="DrawerVariant.Mini"
@@ -35,8 +72,37 @@
 @code {
     private bool _drawerOpen = true;
 
+    protected override void OnInitialized()
+    {
+        Auth.AuthStateChanged += OnAuthChanged;
+    }
+
+    public void Dispose()
+    {
+        Auth.AuthStateChanged -= OnAuthChanged;
+    }
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+
     private void ToggleDrawer()
     {
         _drawerOpen = !_drawerOpen;
+    }
+
+    private async Task OpenLogin()
+    {
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            NoHeader = true
+        };
+        await DialogService.ShowAsync<Components.LoginDialog>("Admin Sign In", options);
+    }
+
+    private async Task HandleLogout()
+    {
+        await Auth.LogoutAsync();
     }
 }

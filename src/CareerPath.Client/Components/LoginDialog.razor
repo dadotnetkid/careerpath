@@ -1,0 +1,117 @@
+@using System.ComponentModel.DataAnnotations
+@using CareerPath.Shared
+@using CareerPath.Client.Services
+
+<MudDialog>
+    <TitleContent>
+        <div style="background:#007F3B; color:#fff; padding:14px 20px; margin:-24px -24px 0 -24px;
+                    border-bottom:3px solid #FFD700; display:flex; align-items:center; gap:10px;">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Style="color:#FFD700;" />
+            <MudText Typo="Typo.h6" Style="color:#fff; font-family:'Source Serif 4',serif; font-weight:700;">
+                Admin Sign In
+            </MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div class="pt-4">
+            <EditForm Model="@formData" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <MudTextField T="string"
+                              @bind-Value="formData.Email"
+                              Label="Email"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Email"
+                              Required="true"
+                              RequiredError="Email is required"
+                              Class="mb-3" />
+
+                <MudTextField T="string"
+                              @bind-Value="formData.Password"
+                              Label="Password"
+                              Variant="Variant.Outlined"
+                              InputType="@(showPassword ? InputType.Text : InputType.Password)"
+                              Required="true"
+                              RequiredError="Password is required"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="TogglePasswordVisibility"
+                              AdornmentAriaLabel="Show or hide password"
+                              Class="mb-2" />
+
+                <MudCheckBox T="bool"
+                             @bind-Value="formData.RememberMe"
+                             Label="Keep me signed in"
+                             Color="Color.Primary"
+                             Class="mb-2" />
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-3">
+                        @errorMessage
+                    </MudAlert>
+                }
+
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Disabled="@isSubmitting"
+                           Style="background:#007F3B; color:#fff; font-weight:600;"
+                           Class="mt-2">
+                    @if (isSubmitting)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        <text>Sign In</text>
+                    }
+                </MudButton>
+            </EditForm>
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel" Disabled="@isSubmitting">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] AuthService Auth { get; set; } = null!;
+
+    private LoginRequest formData = new();
+    private bool isSubmitting = false;
+    private string errorMessage = "";
+    private bool showPassword = false;
+
+    private async Task HandleSubmit()
+    {
+        if (isSubmitting) return;
+        isSubmitting = true;
+        errorMessage = "";
+
+        var ok = await Auth.LoginAsync(formData);
+
+        isSubmitting = false;
+
+        if (ok)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            errorMessage = "Invalid email or password.";
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

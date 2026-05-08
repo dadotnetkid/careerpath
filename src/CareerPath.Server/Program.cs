@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using CareerPath.Server.Data;
 using CareerPath.Server.Services;
 
@@ -56,6 +58,40 @@ var dbPath = Path.Combine(dbDir, "careerpath.db");
 Console.WriteLine($"DB path: {dbPath}");
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
 
+// ── ASP.NET Core Identity (admin auth, cookie-based) ──
+//
+// One seeded admin user, no registration / password reset / roles. The
+// Identity tables are created by EF inside AppDbContext (which now extends
+// IdentityDbContext<IdentityUser>). See AGENT_CONTRACT_SPEC_V4.md §3.
+builder.Services.AddIdentityCore<IdentityUser>(options =>
+{
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 8;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireLowercase = false; // single-admin thesis demo; admin chose the seed password
+    options.User.RequireUniqueEmail = true;
+})
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddCookie(IdentityConstants.ApplicationScheme, options =>
+    {
+        options.Cookie.Name = builder.Configuration["Auth:CookieName"] ?? "CareerPath.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan = TimeSpan.FromDays(int.TryParse(builder.Configuration["Auth:ExpireDays"], out var d) ? d : 30);
+        options.SlidingExpiration = true;
+        // ASP.NET Core Identity's default cookie handler returns 302 to /Account/Login
+        // which would 404 here. The Blazor client handles 401 by opening the login dialog.
+        options.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
+        options.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
+    });
+builder.Services.AddAuthorization();
+
 var datasetService = new DatasetService(csvPath);
 builder.Services.AddSingleton(datasetService);
 builder.Services.AddSingleton(new PredictionService(modelPath));
@@ -80,6 +116,41 @@ try
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+
+    // Seed the single admin user from configuration. Idempotent: if the user
+    // already exists we leave the password alone (so a future password
+    // rotation isn't reverted by a redeploy). See AGENT_CONTRACT_SPEC_V4.md §3.
+    try
+    {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var adminEmail = builder.Configuration["Auth:AdminEmail"] ?? "";
+        var adminPassword = builder.Configuration["Auth:AdminPassword"] ?? "";
+        if (!string.IsNullOrEmpty(adminEmail) && !string.IsNullOrEmpty(adminPassword))
+        {
+            var existing = userManager.FindByEmailAsync(adminEmail).GetAwaiter().GetResult();
+            if (existing == null)
+            {
+                var user = new IdentityUser { UserName = adminEmail, Email = adminEmail, EmailConfirmed = true };
+                var result = userManager.CreateAsync(user, adminPassword).GetAwaiter().GetResult();
+                if (result.Succeeded)
+                    Console.WriteLine($"Admin user seeded: {adminEmail}");
+                else
+                    Console.Error.WriteLine($"Admin user seed failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+            else
+            {
+                Console.WriteLine($"Admin user already exists, skipping seed: {adminEmail}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Auth:AdminEmail / Auth:AdminPassword not configured; skipping admin seed.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Admin seed failed: {ex.Message}");
+    }
 
     // Best-effort ingest of any cv_metrics.json the trainer has written. The
     // file may not exist yet (Agent E's trainer may not have run) — that's OK.
@@ -114,6 +185,9 @@ app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "CareerPath 
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapFallbackToFile("index.html");
