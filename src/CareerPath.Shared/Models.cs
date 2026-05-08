@@ -2,20 +2,35 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CareerPath.Shared;
 
+// ── Binary classifier input ──
+//
+// FEATURE SET (locked 2026-05 against data/alumni_gts3.csv):
+//   1. YearGraduated   numeric
+//   2. Gwa             categorical: "Outstanding" | "Very Satisfactory" | "Satisfactory" | "Fair"
+//   3. Honors          categorical: "No Honors" | "Cum Laude" | "Magna Cum Laude" | "Summa Cum Laude"
+//   4. Competencies    text (TF-IDF)
+//   5. CareerClarity   categorical: "Low" | "Medium" | "High"
+//   6. Interest        text (RIASEC code triplet, TF-IDF) — e.g. "CSE", "RIC"
+//
+// Course (BSIT/BSCS/BSIS) was REMOVED — not collected in GTS 3.
+// Leakage columns (NEVER features): CareerAlignment, JobTitle, FieldOfIndustry,
+// EmploymentStatus, JobRetention, JobLevel.
 public class StudentInput
 {
-    [Required]
-    public string Course { get; set; } = "BSIT";
-
     [Range(2015, 2035)]
     public int YearGraduated { get; set; } = DateTime.Now.Year;
 
     [Required]
-    [Range(1.00, 5.00)]
-    public float Gwa { get; set; }
+    public string Gwa { get; set; } = "";
+
+    [Required]
+    public string Honors { get; set; } = "No Honors";
 
     [Required]
     public string Competencies { get; set; } = "";
+
+    [Required]
+    public string CareerClarity { get; set; } = "";
 
     [Required]
     public string Interest { get; set; } = "";
@@ -69,28 +84,30 @@ public class ModelComparison
 public class DatasetSummary
 {
     public int TotalRecords { get; set; }
-    public Dictionary<string, int> ByCourse { get; set; } = new();
+    public Dictionary<string, int> ByGwa { get; set; } = new();
+    public Dictionary<string, int> ByHonors { get; set; } = new();
     public Dictionary<string, int> ByCareerOutcome { get; set; } = new();
+    public Dictionary<string, int> ByCareerClarity { get; set; } = new();
     public Dictionary<string, int> ByEmploymentStatus { get; set; } = new();
+    public Dictionary<string, int> ByRiasecDominant { get; set; } = new();
     public Dictionary<int, int> ByYear { get; set; } = new();
-    public double GwaAverage { get; set; }
-    public double GwaMin { get; set; }
-    public double GwaMax { get; set; }
 }
 
 public class AlumniRecord
 {
-    public string Id { get; set; } = "";
-    public string Name { get; set; } = "";
     public int YearGraduated { get; set; }
-    public string Course { get; set; } = "";
-    public float Gwa { get; set; }
-    public string JobPosition { get; set; } = "";
-    public string FieldOfIndustry { get; set; } = "";
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
     public string Competencies { get; set; } = "";
     public string EmploymentStatus { get; set; } = "";
     public string CareerAlignment { get; set; } = "";
+    public string JobRetention { get; set; } = "";
+    public string CareerClarity { get; set; } = "";
+    public string RiasecDominant { get; set; } = "";
     public string Interest { get; set; } = "";
+    public string FieldOfIndustry { get; set; } = "";
+    public string JobLevel { get; set; } = "";
+    public string JobTitle { get; set; } = "";
     public string CareerOutcome { get; set; } = "";
 }
 
@@ -168,6 +185,9 @@ public class CareerClarityResult
     public double RiasecAlignmentScore { get; set; }  // E: 5 if aligned, else 1
     public double TotalScore { get; set; }            // A+B+C+D+E (max 25)
     public string ClarityLabel { get; set; } = "";    // "Very High", "High", "Moderate", "Low", "Highly Uncertain"
+
+    /// <summary>Discrete bucket for ML feature: "Low" | "Medium" | "High". Derived from TotalScore.</summary>
+    public string ClarityBucket { get; set; } = "";
 }
 
 // ── Full Assessment Input (all steps combined) ──
@@ -182,6 +202,9 @@ public class FullAssessmentInput
 
     /// <summary>Step 3: GWA category</summary>
     public string GwaCategory { get; set; } = "";  // "Outstanding", "Very Satisfactory", "Satisfactory", "Fair"
+
+    /// <summary>Step 3: Honors category — "No Honors", "Cum Laude", "Magna Cum Laude", "Summa Cum Laude"</summary>
+    public string Honors { get; set; } = "No Honors";
 
     /// <summary>Step 3: Selected competencies/skills</summary>
     public List<string> Skills { get; set; } = new();
@@ -204,6 +227,10 @@ public class FullAssessmentResult
 
     // AI-generated detailed analysis
     public string AiAnalysis { get; set; } = "";
+
+    // Binary ML prediction (ICT-Aligned vs Non-ICT-Aligned) — populated by /api/predict
+    // when student presses the "Predict my career outcome" button on the report.
+    public PredictionResult? Prediction { get; set; }
 }
 
 public class JobMatch

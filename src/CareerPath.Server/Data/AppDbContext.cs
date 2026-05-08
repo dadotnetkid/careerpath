@@ -12,10 +12,11 @@ public class AppDbContext : DbContext
 public class PredictionLog
 {
     public int Id { get; set; }
-    public string Course { get; set; } = "";
     public int YearGraduated { get; set; }
-    public float Gwa { get; set; }
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
     public string Competencies { get; set; } = "";
+    public string CareerClarity { get; set; } = "";
     public string Interest { get; set; } = "";
     public string PredictedOutcome { get; set; } = "";
     public float Confidence { get; set; }
