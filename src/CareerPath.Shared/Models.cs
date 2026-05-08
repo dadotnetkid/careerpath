@@ -257,6 +257,31 @@ public class ModelStatus
     public bool Ready { get; set; }
 }
 
+// ── Auth ──
+//
+// Cookie-based admin auth. The Identity store lives in the same SQLite DB
+// as PredictionLog / TrainingRun. Only one admin user is seeded on first
+// startup (email/password from appsettings.Production.json). No
+// registration endpoint — admin-only by design (thesis demo).
+
+public class LoginRequest
+{
+    [Required, EmailAddress]
+    public string Email { get; set; } = "";
+
+    [Required]
+    public string Password { get; set; } = "";
+
+    /// <summary>If true, the auth cookie persists across browser restarts.</summary>
+    public bool RememberMe { get; set; } = false;
+}
+
+public class AuthStatusDto
+{
+    public bool IsAuthenticated { get; set; }
+    public string Email { get; set; } = "";
+}
+
 // ── RIASEC + Career Clarity Workflow ──
 
 public class RiasecQuestion

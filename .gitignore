@@ -57,6 +57,7 @@ Desktop.ini
 # Secrets / local configuration  (DO NOT COMMIT)
 # =====================================================
 appsettings.Development.json
+appsettings.Production.json
 appsettings.*.local.json
 secrets.json
 *.env
