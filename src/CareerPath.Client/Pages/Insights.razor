@@ -137,6 +137,163 @@ else if (comparison != null)
         </MudCardContent>
     </MudCard>
 
+    @* ── Diagnostic confusion matrices (4×2 + 4×4) — V3 add-on ── *@
+    @if (diagnostic == null && diagnosticUnavailable)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-6">
+            Diagnostic confusion matrices not yet generated. Run
+            <code>dotnet run --project src/CareerPath.ML</code> to populate.
+        </MudAlert>
+    }
+    else if (diagnostic != null)
+    {
+        // Canonical 4-class label order (rows for both panels).
+        var diagActuals = new[] { "Core ICT", "ICT-Adjacent", "Non-ICT but Adjacent", "Non-ICT" };
+        // Which binary outcome each actual sub-class is "expected" to collapse to.
+        var expectedBinary = new[] { "ICT-Aligned", "ICT-Aligned", "Non-ICT-Aligned", "Non-ICT-Aligned" };
+
+        string TintGreen(double frac) =>
+            $"background-color: rgba(10,93,46,{(frac * 0.45).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)});";
+        string TintRed(double frac) =>
+            $"background-color: rgba(220,53,69,{(frac * 0.45).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)});";
+
+        @* Panel B — 4×2 (predictions per actual sub-class) *@
+        <MudCard Elevation="3" Class="mb-6">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Diagnostic: 4-class breakdown vs binary prediction</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Rows are the actual 4-class <code>CareerAlignment</code> label; columns are the canonical
+                    binary model's prediction. Green = matches the expected collapse; red = contradicts it.
+                </MudText>
+                @{
+                    var m42 = diagnostic.BinaryByActual4Class;
+                    var counts42 = m42.Counts ?? Array.Empty<int[]>();
+                    var rowTotals42 = m42.RowTotals ?? Array.Empty<int>();
+                }
+                <div style="overflow-x:auto;">
+                    <table style="border-collapse:collapse; width:100%; max-width:760px; margin:0 auto;">
+                        <thead>
+                            <tr>
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd;"></th>
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd; text-align:center;">Predicted: ICT-Aligned</th>
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd; text-align:center;">Predicted: Non-ICT-Aligned</th>
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd; text-align:center;">Row total</th>
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd; text-align:center;">Expected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < diagActuals.Length; i++)
+                            {
+                                var actualLabel = diagActuals[i];
+                                var rowTotal = i < rowTotals42.Length ? rowTotals42[i] : 0;
+                                var rowCounts = (i < counts42.Length && counts42[i] != null) ? counts42[i] : new int[2];
+                                var expectedCol = expectedBinary[i] == "ICT-Aligned" ? 0 : 1;
+                                <tr>
+                                    <td style="background:#f8f9fa; font-weight:600; padding:8px 12px; border:1px solid #ddd;">@actualLabel</td>
+                                    @for (int j = 0; j < 2; j++)
+                                    {
+                                        var count = j < rowCounts.Length ? rowCounts[j] : 0;
+                                        var pct = rowTotal > 0 ? (count * 100.0 / rowTotal) : 0;
+                                        var frac = rowTotal > 0 ? (count / (double)rowTotal) : 0;
+                                        var style = j == expectedCol ? TintGreen(frac) : TintRed(frac);
+                                        <td style="@style padding:10px 12px; border:1px solid #ddd; text-align:center; font-weight:600;">
+                                            @count@(rowTotal > 0 ? $" ({pct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}%)" : "")
+                                        </td>
+                                    }
+                                    <td style="padding:10px 12px; border:1px solid #ddd; text-align:center; font-weight:700;">@rowTotal</td>
+                                    <td style="padding:10px 12px; border:1px solid #ddd; text-align:center; color:#007F3B; font-weight:600;">@expectedBinary[i]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3" Style="display:block; text-align:center;">
+                    This shows how the canonical binary model distributes its predictions across the 4-class label.
+                    The model never sees the 4-class label — this is purely descriptive.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+
+        @* Panel C — 4×4 multiclass confusion matrix *@
+        <MudCard Elevation="3" Class="mb-6">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Diagnostic: 4-class Confusion Matrix (4×4)</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    A separate multiclass model (not used by <code>/api/predict</code>) was trained for
+                    transparency. Rows are actual labels; columns are predicted labels. The diagonal
+                    counts correct predictions.
+                </MudText>
+                @{
+                    var m44 = diagnostic.Multiclass4x4;
+                    var labels44 = (m44.Labels != null && m44.Labels.Count == 4) ? m44.Labels.ToArray() : diagActuals;
+                    var counts44 = m44.Counts ?? Array.Empty<int[]>();
+                    var rowTotals44 = m44.RowTotals ?? Array.Empty<int>();
+                }
+                <div style="overflow-x:auto;">
+                    <table style="border-collapse:collapse; width:100%; max-width:880px; margin:0 auto;">
+                        <thead>
+                            <tr>
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd;"></th>
+                                @foreach (var lab in labels44)
+                                {
+                                    <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd; text-align:center;">Predicted: @lab</th>
+                                }
+                                <th style="background:#007F3B; color:#fff; padding:8px 12px; border:1px solid #ddd; text-align:center;">Row total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < labels44.Length; i++)
+                            {
+                                var rowTotal = i < rowTotals44.Length ? rowTotals44[i] : 0;
+                                var rowCounts = (i < counts44.Length && counts44[i] != null) ? counts44[i] : new int[labels44.Length];
+                                <tr>
+                                    <td style="background:#f8f9fa; font-weight:600; padding:8px 12px; border:1px solid #ddd;">@labels44[i]</td>
+                                    @for (int j = 0; j < labels44.Length; j++)
+                                    {
+                                        var count = j < rowCounts.Length ? rowCounts[j] : 0;
+                                        var frac = rowTotal > 0 ? (count / (double)rowTotal) : 0;
+                                        var style = i == j ? TintGreen(frac) : TintRed(frac);
+                                        var showPct = rowTotal > 1;
+                                        var pct = rowTotal > 0 ? (count * 100.0 / rowTotal) : 0;
+                                        <td style="@style padding:10px 12px; border:1px solid #ddd; text-align:center; font-weight:600;">
+                                            @count@(showPct ? $" ({pct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}%)" : "")
+                                        </td>
+                                    }
+                                    <td style="padding:10px 12px; border:1px solid #ddd; text-align:center; font-weight:700;">@rowTotal</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex flex-wrap mt-4" style="gap:10px; justify-content:center;">
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                        Multiclass accuracy: @((diagnostic.Multiclass4ClassAccuracy * 100).ToString("F1"))% (test fold n=@diagnostic.Multiclass4ClassTestRows)
+                    </MudChip>
+                    <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined">
+                        Macro-F1: @((diagnostic.Multiclass4ClassMacroF1 * 100).ToString("F1"))%
+                    </MudChip>
+                </div>
+
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">
+                    The "Non-ICT" class has only 6 alumni in the dataset (1–2 in any given test fold).
+                    Predictions for that class are statistically unreliable, and 4-class accuracy will be
+                    lower than the canonical binary 76% — that's expected, not a bug. The 4×4 view is
+                    provided for transparency; the binary model in the 2×2 matrix above is the canonical
+                    one used by the prediction API.
+                </MudAlert>
+            </MudCardContent>
+        </MudCard>
+    }
+
     @* Feature Importance *@
     <MudCard Elevation="3" Class="mb-6">
         <MudCardHeader Style="background:#007F3B; color:#fff;">
@@ -482,6 +639,8 @@ else if (comparison != null)
     private ModelMetrics? bestModel;
     private DatasetSummary? summary;
     private List<TrainingRunDto>? cvRuns;
+    private DiagnosticConfusionMatrices? diagnostic;
+    private bool diagnosticUnavailable = false;
     private bool isLoading = true;
     private bool notTrained;
 
@@ -533,6 +692,25 @@ else if (comparison != null)
         catch
         {
             cvRuns = new List<TrainingRunDto>();
+        }
+
+        // Diagnostic confusion matrices (4×2 + 4×4) — endpoint may 404 if trainer hasn't been run.
+        try
+        {
+            var diagResponse = await Http.GetAsync("api/metrics/diagnostic");
+            if (diagResponse.IsSuccessStatusCode)
+            {
+                diagnostic = await diagResponse.Content.ReadFromJsonAsync<DiagnosticConfusionMatrices>();
+                if (diagnostic == null) diagnosticUnavailable = true;
+            }
+            else
+            {
+                diagnosticUnavailable = true;
+            }
+        }
+        catch
+        {
+            diagnosticUnavailable = true;
         }
 
         isLoading = false;

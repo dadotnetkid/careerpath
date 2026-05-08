@@ -1,0 +1,83 @@
+{
+  "computedAt": "2026-05-08T10:44:38.7966532Z",
+  "binaryByActual4Class": {
+    "actualLabels": [
+      "Core ICT",
+      "ICT-Adjacent",
+      "Non-ICT but Adjacent",
+      "Non-ICT"
+    ],
+    "predictedLabels": [
+      "ICT-Aligned",
+      "Non-ICT-Aligned"
+    ],
+    "counts": [
+      [
+        47,
+        1
+      ],
+      [
+        79,
+        28
+      ],
+      [
+        25,
+        115
+      ],
+      [
+        1,
+        5
+      ]
+    ],
+    "rowTotals": [
+      48,
+      107,
+      140,
+      6
+    ]
+  },
+  "multiclass4x4": {
+    "labels": [
+      "Core ICT",
+      "ICT-Adjacent",
+      "Non-ICT but Adjacent",
+      "Non-ICT"
+    ],
+    "counts": [
+      [
+        8,
+        1,
+        0,
+        0
+      ],
+      [
+        2,
+        11,
+        7,
+        0
+      ],
+      [
+        0,
+        6,
+        14,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        0
+      ]
+    ],
+    "rowTotals": [
+      9,
+      20,
+      20,
+      1
+    ]
+  },
+  "multiclass4ClassAccuracy": 0.66,
+  "multiclass4ClassMacroF1": 0.522283664132188,
+  "multiclass4ClassTrainRows": 251,
+  "multiclass4ClassTestRows": 50
+}

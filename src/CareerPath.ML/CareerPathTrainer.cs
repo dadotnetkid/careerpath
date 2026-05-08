@@ -2,6 +2,7 @@
 using Microsoft.ML.Data;
 using Microsoft.ML.Calibrators;
 using CareerPath.Shared;
+using System.Globalization;
 using System.Text.Json;
 
 namespace CareerPath.ML;
@@ -364,6 +365,252 @@ public class CareerPathTrainer
             TrainedAt = DateTime.UtcNow,
             Runs = runs
         };
+    }
+
+    /// <summary>
+    /// Builds the two diagnostic confusion matrices surfaced on the Insights page
+    /// alongside the canonical 2×2 (which stays unchanged):
+    ///
+    ///   1. <b>4×2</b>: rows = actual 4-class <c>CareerAlignment</c>, columns =
+    ///      predicted binary outcome from the canonical RF (loaded from
+    ///      <c>model.zip</c> in <paramref name="outputDir"/>). Built by running
+    ///      the binary model over all 301 alumni and tabulating by sub-class.
+    ///   2. <b>4×4</b>: rows = actual 4-class, columns = predicted 4-class. Trains
+    ///      a SEPARATE multiclass One-vs-All FastForest model (saved as
+    ///      <c>model_4class.zip</c>) on the same 80/20 split (seed=42) used by
+    ///      <see cref="TrainAll"/>, and evaluates on the test fold.
+    ///
+    /// The binary <c>model.zip</c> and <c>metrics.json</c> are NOT touched —
+    /// V3 is purely additive. The label order (rows + cols) is fixed at
+    /// <c>["Core ICT","ICT-Adjacent","Non-ICT but Adjacent","Non-ICT"]</c>; the
+    /// client renders by index so order MUST be respected.
+    /// </summary>
+    public DiagnosticConfusionMatrices TrainDiagnostic(string csvPath, string outputDir)
+    {
+        // Canonical row/col label order. The client renders by index — do not reorder.
+        var classLabels = new[] { "Core ICT", "ICT-Adjacent", "Non-ICT but Adjacent", "Non-ICT" };
+        var binaryLabels = new[] { "ICT-Aligned", "Non-ICT-Aligned" };
+
+        // ── 1. Load alumni rows with their original CareerAlignment via CsvHelper ──
+        // We need both the StudentFeatures (to feed the binary model) and the
+        // 4-class CareerAlignment string (to bucket the rows). Re-loading via
+        // CsvHelper is the cleanest way to get both in lockstep.
+        var alumni = LoadAlumniWithAlignment(csvPath);
+        Console.WriteLine($"\n--- Diagnostic: loaded {alumni.Count} alumni rows ---");
+
+        // ── 2. 4×2 matrix: load canonical model.zip, predict for every alumni ──
+        var binaryModelPath = Path.Combine(outputDir, "model.zip");
+        if (!File.Exists(binaryModelPath))
+            throw new FileNotFoundException(
+                $"Diagnostic 4×2 matrix needs the canonical binary model at {binaryModelPath}. " +
+                "Run TrainAll(...) first.");
+
+        var engine = LoadPredictionEngine(binaryModelPath);
+
+        var counts4x2 = new int[4][];
+        for (int i = 0; i < 4; i++) counts4x2[i] = new int[2];
+        var rowTotals4x2 = new int[4];
+
+        foreach (var row in alumni)
+        {
+            var rowIdx = Array.IndexOf(classLabels, row.CareerAlignment);
+            if (rowIdx < 0) continue; // row with unrecognized alignment — skip (shouldn't happen with cleaned data)
+
+            var pred = engine.Predict(row.Features);
+            // PredictedLabel == true means binary "ICT-Aligned" (col 0), false means "Non-ICT-Aligned" (col 1).
+            var colIdx = pred.PredictedLabel ? 0 : 1;
+            counts4x2[rowIdx][colIdx]++;
+            rowTotals4x2[rowIdx]++;
+        }
+
+        Console.WriteLine("  4×2 matrix (rows=actual 4-class, cols=predicted binary):");
+        for (int i = 0; i < 4; i++)
+            Console.WriteLine($"    {classLabels[i],-22}  ICT-Aligned={counts4x2[i][0],3}  Non-ICT-Aligned={counts4x2[i][1],3}  total={rowTotals4x2[i]}");
+
+        var matrix4x2 = new ConfusionMatrix4x2
+        {
+            ActualLabels = classLabels.ToList(),
+            PredictedLabels = binaryLabels.ToList(),
+            Counts = counts4x2,
+            RowTotals = rowTotals4x2
+        };
+
+        // ── 3. Train a fresh 4-class multiclass model ──
+        Console.WriteLine("\n--- Diagnostic: training 4-class multiclass model (One-vs-All FastForest) ---");
+
+        var fourClassRows = alumni
+            .Where(a => Array.IndexOf(classLabels, a.CareerAlignment) >= 0)
+            .Select(a => new CareerAlignment4ClassFeatures
+            {
+                YearGraduated = a.Features.YearGraduated,
+                Gwa = a.Features.Gwa,
+                Honors = a.Features.Honors,
+                Competencies = a.Features.Competencies,
+                CareerClarity = a.Features.CareerClarity,
+                Interest = a.Features.Interest,
+                Label = a.CareerAlignment
+            })
+            .ToList();
+
+        var multiclassData = _mlContext.Data.LoadFromEnumerable(fourClassRows);
+        var multiclassSplit = _mlContext.Data.TrainTestSplit(multiclassData, testFraction: 0.2, seed: 42);
+        var multiclassTrain = multiclassSplit.TrainSet;
+        var multiclassTest = multiclassSplit.TestSet;
+
+        var trainCount4Class = (int)multiclassTrain.GetColumn<string>("Label").Count();
+        var testCount4Class = (int)multiclassTest.GetColumn<string>("Label").Count();
+        Console.WriteLine($"  4-class train={trainCount4Class}, test={testCount4Class}");
+
+        // Mirror the binary feature pipeline so comparison stays honest:
+        // one-hot Gwa/Honors/CareerClarity, TF-IDF Competencies/Interest, concat YearGraduated, normalize.
+        // Then MapValueToKey before the trainer, MapKeyToValue after, so PredictedLabel is the
+        // original 4-class string.
+        var multiclassPipeline = _mlContext.Transforms.Categorical.OneHotEncoding("GwaEncoded", "Gwa")
+            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("HonorsEncoded", "Honors"))
+            .Append(_mlContext.Transforms.Categorical.OneHotEncoding("CareerClarityEncoded", "CareerClarity"))
+            .Append(_mlContext.Transforms.Text.FeaturizeText("CompetenciesFeaturized", "Competencies"))
+            .Append(_mlContext.Transforms.Text.FeaturizeText("InterestFeaturized", "Interest"))
+            .Append(_mlContext.Transforms.Concatenate("Features",
+                "YearGraduated",
+                "GwaEncoded",
+                "HonorsEncoded",
+                "CareerClarityEncoded",
+                "CompetenciesFeaturized",
+                "InterestFeaturized"))
+            .Append(_mlContext.Transforms.NormalizeMinMax("Features"))
+            .Append(_mlContext.Transforms.Conversion.MapValueToKey("Label", "Label"))
+            .Append(_mlContext.MulticlassClassification.Trainers.OneVersusAll(
+                _mlContext.BinaryClassification.Trainers.FastForest(
+                    labelColumnName: "Label",
+                    featureColumnName: "Features",
+                    numberOfTrees: 100,
+                    numberOfLeaves: 20,
+                    minimumExampleCountPerLeaf: 5),
+                labelColumnName: "Label"))
+            .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
+
+        var multiclassModel = multiclassPipeline.Fit(multiclassTrain);
+
+        // Save the diagnostic 4-class model
+        var multiclassModelPath = Path.Combine(outputDir, "model_4class.zip");
+        Directory.CreateDirectory(outputDir);
+        _mlContext.Model.Save(multiclassModel, multiclassTrain.Schema, multiclassModelPath);
+        Console.WriteLine($"  4-class model saved to: {multiclassModelPath}");
+
+        // ── 4. Evaluate on the test fold — manually tabulate to keep label order canonical ──
+        // After the pipeline runs, the "Label" column has been replaced by a Key (UInt32),
+        // so we read actual labels from the pre-transform test IDataView and predicted labels
+        // from the post-transform output. Both arrays are in row order, so they zip correctly.
+        var actualLabels = multiclassTest.GetColumn<string>("Label").ToArray();
+        var testPredictions = multiclassModel.Transform(multiclassTest);
+        var predictedLabels = testPredictions.GetColumn<string>("PredictedLabel").ToArray();
+
+        if (actualLabels.Length != predictedLabels.Length)
+            throw new InvalidOperationException(
+                $"Test fold actual/predicted length mismatch: {actualLabels.Length} vs {predictedLabels.Length}");
+
+        var counts4x4 = new int[4][];
+        for (int i = 0; i < 4; i++) counts4x4[i] = new int[4];
+        var rowTotals4x4 = new int[4];
+
+        for (int i = 0; i < actualLabels.Length; i++)
+        {
+            var rowIdx = Array.IndexOf(classLabels, actualLabels[i]);
+            var colIdx = Array.IndexOf(classLabels, predictedLabels[i]);
+            if (rowIdx < 0 || colIdx < 0) continue;
+            counts4x4[rowIdx][colIdx]++;
+            rowTotals4x4[rowIdx]++;
+        }
+
+        Console.WriteLine("  4×4 matrix (rows=actual, cols=predicted; canonical order):");
+        Console.WriteLine($"    {"",-22}  {"CoreICT",8} {"ICT-Adj",8} {"Non-ICT-A",10} {"Non-ICT",8}  total");
+        for (int i = 0; i < 4; i++)
+            Console.WriteLine($"    {classLabels[i],-22}  {counts4x4[i][0],8} {counts4x4[i][1],8} {counts4x4[i][2],10} {counts4x4[i][3],8}  {rowTotals4x4[i]}");
+
+        // Per-class precision/recall/F1 (canonical order), then macro-F1 and accuracy
+        double diagonal = 0;
+        var f1s = new double[4];
+        for (int c = 0; c < 4; c++)
+        {
+            int tp = counts4x4[c][c];
+            int fn = rowTotals4x4[c] - tp;
+            int fp = 0;
+            for (int r = 0; r < 4; r++) if (r != c) fp += counts4x4[r][c];
+
+            double precision = (tp + fp) == 0 ? 0.0 : (double)tp / (tp + fp);
+            double recall = (tp + fn) == 0 ? 0.0 : (double)tp / (tp + fn);
+            double f1 = (precision + recall) == 0 ? 0.0 : 2 * precision * recall / (precision + recall);
+            f1s[c] = f1;
+            diagonal += tp;
+
+            Console.WriteLine($"    {classLabels[c],-22}  precision={precision:F3}  recall={recall:F3}  F1={f1:F3}");
+        }
+
+        double accuracy4Class = actualLabels.Length == 0 ? 0.0 : diagonal / actualLabels.Length;
+        double macroF1 = f1s.Average();
+        Console.WriteLine($"  Multiclass accuracy: {accuracy4Class:P2}  Macro-F1: {macroF1:P2}  (test fold n={actualLabels.Length})");
+
+        var matrix4x4 = new ConfusionMatrix4x4
+        {
+            Labels = classLabels.ToList(),
+            Counts = counts4x4,
+            RowTotals = rowTotals4x4
+        };
+
+        return new DiagnosticConfusionMatrices
+        {
+            ComputedAt = DateTime.UtcNow,
+            BinaryByActual4Class = matrix4x2,
+            Multiclass4x4 = matrix4x4,
+            Multiclass4ClassAccuracy = accuracy4Class,
+            Multiclass4ClassMacroF1 = macroF1,
+            Multiclass4ClassTrainRows = trainCount4Class,
+            Multiclass4ClassTestRows = testCount4Class
+        };
+    }
+
+    /// <summary>
+    /// Reads alumni_gts3.csv via CsvHelper and produces (StudentFeatures, CareerAlignment)
+    /// pairs in CSV row order. Used by <see cref="TrainDiagnostic"/> so we can run the
+    /// binary engine over each row and bucket the prediction by the 4-class label.
+    /// </summary>
+    private static List<(StudentFeatures Features, string CareerAlignment)> LoadAlumniWithAlignment(string csvPath)
+    {
+        var rows = new List<(StudentFeatures, string)>();
+
+        using var reader = new StreamReader(csvPath);
+        var config = new CsvHelper.Configuration.CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord = true,
+            MissingFieldFound = null,
+            BadDataFound = null
+        };
+        using var csv = new CsvHelper.CsvReader(reader, config);
+        csv.Read();
+        csv.ReadHeader();
+
+        while (csv.Read())
+        {
+            var alignment = (csv.GetField("CareerAlignment") ?? "").Trim();
+
+            float year = 0f;
+            float.TryParse(csv.GetField("YearGraduated") ?? "", NumberStyles.Float, CultureInfo.InvariantCulture, out year);
+
+            var features = new StudentFeatures
+            {
+                YearGraduated = year,
+                Gwa = (csv.GetField("Gwa") ?? "").Trim(),
+                Honors = (csv.GetField("Honors") ?? "").Trim(),
+                Competencies = (csv.GetField("Competencies") ?? "").Trim(),
+                CareerClarity = (csv.GetField("CareerClarity") ?? "").Trim(),
+                Interest = (csv.GetField("Interest") ?? "").Trim(),
+                Label = false // not used at inference; the binary engine ignores it
+            };
+
+            rows.Add((features, alignment));
+        }
+
+        return rows;
     }
 
     /// <summary>

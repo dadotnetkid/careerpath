@@ -54,6 +54,19 @@ Console.WriteLine($"CV runs: {cvReport.Runs.Count} (expected 6 = {{RF,DT,LR}} ×
 foreach (var run in cvReport.Runs)
     Console.WriteLine($"  {run.Algorithm,-22} {run.FoldCount,2}-fold  Acc={run.MeanAccuracy:P2} ± {run.StdAccuracy:P2}");
 
+// ── Diagnostic confusion matrices (4×2 + 4×4) ──
+// Additive only — the canonical model.zip / metrics.json above are NOT touched.
+// Outputs: MLModel/diagnostic_metrics.json + MLModel/model_4class.zip.
+Console.WriteLine("\n=== Diagnostic Confusion Matrices (4×2 + 4×4) ===");
+var diag = trainer.TrainDiagnostic(csvPath, modelDir);
+var diagPath = Path.Combine(modelDir, "diagnostic_metrics.json");
+File.WriteAllText(diagPath, JsonSerializer.Serialize(diag, new JsonSerializerOptions
+{
+    WriteIndented = true,
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+}));
+Console.WriteLine($"Diagnostic metrics saved to: {diagPath}");
+
 // ── Multiclass RIASEC ──
 Console.WriteLine("\n=== RIASEC Multiclass Training ===\n");
 var riasecTrainer = new RiasecTrainer();

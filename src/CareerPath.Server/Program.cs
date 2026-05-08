@@ -24,14 +24,19 @@ var csvPath = ResolveContentPath(Path.Combine("data", "alumni_gts3.csv"), Path.C
 var modelPath = ResolveContentPath(Path.Combine("MLModel", "model.zip"), Path.Combine("src", "CareerPath.Server", "MLModel", "model.zip"));
 var metricsPath = ResolveContentPath(Path.Combine("MLModel", "metrics.json"), Path.Combine("src", "CareerPath.Server", "MLModel", "metrics.json"));
 var cvMetricsPath = ResolveContentPath(Path.Combine("MLModel", "cv_metrics.json"), Path.Combine("src", "CareerPath.Server", "MLModel", "cv_metrics.json"));
+var diagnosticMetricsPath = ResolveContentPath(
+    Path.Combine("MLModel", "diagnostic_metrics.json"),
+    Path.Combine("src", "CareerPath.Server", "MLModel", "diagnostic_metrics.json"));
 
 Console.WriteLine($"Base dir: {baseDir}");
 Console.WriteLine($"CSV path: {csvPath} (exists: {File.Exists(csvPath)})");
 Console.WriteLine($"Model path: {modelPath} (exists: {File.Exists(modelPath)})");
 Console.WriteLine($"Metrics path: {metricsPath} (exists: {File.Exists(metricsPath)})");
 Console.WriteLine($"CV metrics path: {cvMetricsPath} (exists: {File.Exists(cvMetricsPath)})");
+Console.WriteLine($"Diagnostic metrics path: {diagnosticMetricsPath} (exists: {File.Exists(diagnosticMetricsPath)})");
 
 builder.Configuration["MLModel:MetricsPath"] = metricsPath;
+builder.Configuration["MLModel:DiagnosticMetricsPath"] = diagnosticMetricsPath;
 
 // Services
 builder.Services.AddControllers()

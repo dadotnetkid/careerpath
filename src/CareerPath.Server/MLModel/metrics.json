@@ -8,7 +8,7 @@
     "AreaUnderRocCurve": 0.8111658456486043,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:17:42.0063039Z",
+    "TrainedAt": "2026-05-08T10:44:07.5716823Z",
     "ConfusionMatrix": [
       [
         21,
@@ -59,7 +59,7 @@
     "AreaUnderRocCurve": 0.80623973727422,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:17:42.6431761Z",
+    "TrainedAt": "2026-05-08T10:44:08.3719558Z",
     "ConfusionMatrix": [
       [
         22,
@@ -110,7 +110,7 @@
     "AreaUnderRocCurve": 0.7914614121510674,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:17:43.1051814Z",
+    "TrainedAt": "2026-05-08T10:44:08.9383832Z",
     "ConfusionMatrix": [
       [
         24,

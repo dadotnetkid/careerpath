@@ -1,12 +1,12 @@
 {
   "Sdca": {
     "AlgorithmName": "SDCA Maximum Entropy",
-    "MacroAccuracy": 0.2222222222222222,
-    "MicroAccuracy": 0.38,
-    "LogLoss": 1.8248567482267242,
+    "MacroAccuracy": 0.2179292929292929,
+    "MicroAccuracy": 0.4,
+    "LogLoss": 1.8590331377997753,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:18:41.6421512Z",
+    "TrainedAt": "2026-05-08T10:45:09.2582879Z",
     "ClassLabels": [
       "Class0",
       "Class1",
@@ -16,25 +16,25 @@
       "Class5"
     ],
     "PerClassPrecision": [
-      0.4,
-      0.4,
+      0.40476190476190477,
+      0.5,
       0,
       0,
-      0,
+      0.5,
       0.5
     ],
     "PerClassRecall": [
-      0.8,
-      0.3333333333333333,
+      0.85,
+      0.16666666666666666,
       0,
       0,
-      0,
+      0.09090909090909091,
       0.2
     ],
     "ConfusionMatrix": [
       [
-        16,
-        2,
+        17,
+        1,
         0,
         1,
         1,
@@ -42,11 +42,11 @@
       ],
       [
         3,
-        2,
+        1,
         0,
         1,
         0,
-        0
+        1
       ],
       [
         4,
@@ -69,12 +69,12 @@
         0,
         0,
         0,
-        0,
-        1
+        1,
+        0
       ],
       [
-        3,
-        1,
+        4,
+        0,
         0,
         0,
         0,
@@ -86,10 +86,10 @@
     "AlgorithmName": "LBFGS Maximum Entropy",
     "MacroAccuracy": 0.22904040404040402,
     "MicroAccuracy": 0.44,
-    "LogLoss": 1.6256655068648889,
+    "LogLoss": 1.6359818890575877,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:18:41.8416251Z",
+    "TrainedAt": "2026-05-08T10:45:09.4653731Z",
     "ClassLabels": [
       "Class0",
       "Class1",
