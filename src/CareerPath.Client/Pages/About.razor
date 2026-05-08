@@ -1,0 +1,114 @@
+@page "/about"
+
+<PageTitle>About</PageTitle>
+
+<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
+    About This System
+</MudText>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardHeader Style="background:#007F3B; color:#fff;">
+        <CardHeaderContent><MudText Typo="Typo.h6">Overview</MudText></CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent Class="pa-6">
+        <MudText Typo="Typo.body1" Class="mb-3">
+            The <strong>Career Path Recommendation System</strong> is a web-based application developed as part of
+            a masteral thesis research project. It uses machine learning to predict whether a graduating student from the
+            College of Information Technology Education (CITE) at Nueva Vizcaya State University - Bayombong Campus
+            will pursue an <strong>ICT-Aligned</strong> or <strong>Non-ICT-Aligned</strong> career path after graduation.
+        </MudText>
+        <MudText Typo="Typo.body1">
+            The prediction is based on historical data from 301 CITE alumni records collected through a
+            CHED Graduate Tracer Study (GTS).
+        </MudText>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardHeader Style="background:#007F3B; color:#fff;">
+        <CardHeaderContent><MudText Typo="Typo.h6">Methodology</MudText></CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent Class="pa-6">
+        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Algorithm</MudText>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            The primary classification model uses <strong>Random Forest</strong>, implemented via ML.NET's
+            FastForestBinaryTrainer, which inherits from RandomForestTrainerBase. Random Forest is an ensemble method
+            that builds multiple decision trees and aggregates their predictions to improve accuracy and reduce overfitting.
+        </MudText>
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Comparison Models</MudText>
+        <MudList T="string" Dense="true" Class="mb-4">
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight">
+                <strong>Decision Tree</strong> - ML.NET FastTreeBinaryTrainer configured with a single tree
+            </MudListItem>
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight">
+                <strong>Logistic Regression</strong> - ML.NET LbfgsLogisticRegressionBinaryTrainer
+            </MudListItem>
+        </MudList>
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Features</MudText>
+        <MudList T="string" Dense="true" Class="mb-4">
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight"><strong>GWA</strong> - General Weighted Average (1.00-5.00)</MudListItem>
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight"><strong>Course</strong> - Academic program (BSIT, BSCS, BSIS)</MudListItem>
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight"><strong>Year Graduated</strong> - Year of graduation</MudListItem>
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight"><strong>Competencies</strong> - Self-assessed skills (TF-IDF processed)</MudListItem>
+            <MudListItem T="string" Icon="@Icons.Material.Filled.ChevronRight"><strong>Interest</strong> - Career interests / RIASEC codes (TF-IDF processed)</MudListItem>
+        </MudList>
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Evaluation</MudText>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            All models are evaluated using Accuracy, Precision, Recall, F1-Score, and AUC on a stratified 80/20
+            train-test split with a fixed seed (42) for reproducibility.
+        </MudText>
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Feature Importance</MudText>
+        <MudText Typo="Typo.body1">
+            Computed using ML.NET's Permutation Feature Importance (PFI), analogous to Mean Decrease in Accuracy (MDA).
+        </MudText>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardHeader Style="background:#007F3B; color:#fff;">
+        <CardHeaderContent><MudText Typo="Typo.h6">Technology Stack</MudText></CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent Class="pa-0">
+        <MudSimpleTable Hover="true" Dense="true">
+            <tbody>
+                <tr><td style="font-weight:600; width:200px;">Runtime</td><td>.NET 10</td></tr>
+                <tr><td style="font-weight:600;">ML Framework</td><td>ML.NET 3.0.1</td></tr>
+                <tr><td style="font-weight:600;">Frontend</td><td>Blazor WebAssembly + MudBlazor</td></tr>
+                <tr><td style="font-weight:600;">Backend</td><td>ASP.NET Core Web API</td></tr>
+                <tr><td style="font-weight:600;">Database</td><td>SQLite via Entity Framework Core</td></tr>
+                <tr><td style="font-weight:600;">API Documentation</td><td>Swagger / OpenAPI (Swashbuckle)</td></tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardHeader Style="background:#007F3B; color:#fff;">
+        <CardHeaderContent><MudText Typo="Typo.h6">Data Source</MudText></CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent Class="pa-6">
+        <MudText Typo="Typo.body1">
+            The training dataset consists of 301 alumni records from the College of Information Technology Education (CITE)
+            at NVSU Bayombong, collected through the Commission on Higher Education (CHED) Graduate Tracer Study (GTS).
+            The data covers graduates from 2021 to 2024 across three degree programs: BSIT, BSCS, and BSIS.
+        </MudText>
+    </MudCardContent>
+</MudCard>
+
+<MudCard Elevation="2" Class="mb-4">
+    <MudCardHeader Style="background:#007F3B; color:#fff;">
+        <CardHeaderContent><MudText Typo="Typo.h6">Researcher</MudText></CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent Class="pa-6">
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">[Researcher name and details to be added]</MudText>
+        <MudText Typo="Typo.body1">
+            <strong>Program:</strong> Master of Science in Information Technology<br />
+            <strong>Institution:</strong> Isabela State University, Central Graduate School<br />
+            <strong>Study Site:</strong> Nueva Vizcaya State University - Bayombong Campus, CITE
+        </MudText>
+    </MudCardContent>
+</MudCard>

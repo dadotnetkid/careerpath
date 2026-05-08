@@ -1,0 +1,143 @@
+{
+  "RandomForest": {
+    "AlgorithmName": "Random Forest (FastForest)",
+    "Accuracy": 0.76,
+    "Precision": 0.7741935483870968,
+    "Recall": 0.8275862068965517,
+    "F1Score": 0.7999999999999999,
+    "AreaUnderRocCurve": 0.8275862068965517,
+    "TrainingRows": 251,
+    "TestRows": 50,
+    "TrainedAt": "2026-04-27T04:22:07.9099626Z",
+    "ConfusionMatrix": [
+      [
+        24,
+        5
+      ],
+      [
+        7,
+        14
+      ]
+    ],
+    "ClassLabels": [
+      "ICT-Aligned",
+      "Non-ICT-Aligned"
+    ],
+    "FeatureImportances": [
+      {
+        "FeatureName": "Interest",
+        "Importance": 57.59
+      },
+      {
+        "FeatureName": "Competencies",
+        "Importance": 26.58
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 15.19
+      },
+      {
+        "FeatureName": "YearGraduated",
+        "Importance": 0.63
+      },
+      {
+        "FeatureName": "Course",
+        "Importance": 0
+      }
+    ]
+  },
+  "DecisionTree": {
+    "AlgorithmName": "Decision Tree (FastTree)",
+    "Accuracy": 0.7,
+    "Precision": 0.7333333333333333,
+    "Recall": 0.7586206896551724,
+    "F1Score": 0.7457627118644068,
+    "AreaUnderRocCurve": 0.7619047619047619,
+    "TrainingRows": 251,
+    "TestRows": 50,
+    "TrainedAt": "2026-04-27T04:22:08.548121Z",
+    "ConfusionMatrix": [
+      [
+        22,
+        7
+      ],
+      [
+        8,
+        13
+      ]
+    ],
+    "ClassLabels": [
+      "ICT-Aligned",
+      "Non-ICT-Aligned"
+    ],
+    "FeatureImportances": [
+      {
+        "FeatureName": "Competencies",
+        "Importance": 41.36
+      },
+      {
+        "FeatureName": "Interest",
+        "Importance": 31.48
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 25.31
+      },
+      {
+        "FeatureName": "YearGraduated",
+        "Importance": 1.85
+      },
+      {
+        "FeatureName": "Course",
+        "Importance": 0
+      }
+    ]
+  },
+  "LogisticRegression": {
+    "AlgorithmName": "Logistic Regression (LBFGS)",
+    "Accuracy": 0.74,
+    "Precision": 0.7666666666666667,
+    "Recall": 0.7931034482758621,
+    "F1Score": 0.7796610169491527,
+    "AreaUnderRocCurve": 0.770935960591133,
+    "TrainingRows": 251,
+    "TestRows": 50,
+    "TrainedAt": "2026-04-27T04:22:08.9011595Z",
+    "ConfusionMatrix": [
+      [
+        23,
+        6
+      ],
+      [
+        7,
+        14
+      ]
+    ],
+    "ClassLabels": [
+      "ICT-Aligned",
+      "Non-ICT-Aligned"
+    ],
+    "FeatureImportances": [
+      {
+        "FeatureName": "Interest",
+        "Importance": 65.58
+      },
+      {
+        "FeatureName": "Competencies",
+        "Importance": 23.38
+      },
+      {
+        "FeatureName": "Course",
+        "Importance": 11.04
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 0
+      },
+      {
+        "FeatureName": "YearGraduated",
+        "Importance": 0
+      }
+    ]
+  }
+}

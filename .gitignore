@@ -1,0 +1,111 @@
+# =====================================================
+# .NET / Visual Studio build artifacts
+# =====================================================
+bin/
+obj/
+out/
+publish-output/
+publish/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.tmp
+*.log
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio
+.vs/
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+*.psess
+*.vsp
+*.vspx
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# VS Code
+.vscode/
+
+# macOS / Windows junk
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =====================================================
+# Secrets / local configuration  (DO NOT COMMIT)
+# =====================================================
+appsettings.Development.json
+appsettings.*.local.json
+secrets.json
+*.env
+.env
+.env.*
+!.env.example
+*.pfx
+*.pem
+*.key
+*.cer
+*.p12
+
+# =====================================================
+# Database files (contain prediction logs / PII)
+# =====================================================
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+careerpath.db
+
+# =====================================================
+# Sensitive datasets (alumni PII — DO NOT COMMIT)
+# =====================================================
+Final - Alumni GTS (RAW).csv
+data/alumni.csv
+data/alumni_raw.csv
+data/*.xlsx
+data/*Responses*.csv
+
+# =====================================================
+# Trained ML models (large binary artifacts — optional)
+# =====================================================
+models/*.model
+models/*.zip
+
+# =====================================================
+# Claude Code local files (KEEP LOCAL ONLY)
+# =====================================================
+.claude/
+CLAUDE.md
+CLAUDE_CODE_HANDOFF.md
+MANUSCRIPT_EDITS.md
+
+# =====================================================
+# Misc
+# =====================================================
+node_modules/
+*.swp
+*.swo
+*~

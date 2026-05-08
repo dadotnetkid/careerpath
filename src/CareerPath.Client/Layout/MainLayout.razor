@@ -1,0 +1,42 @@
+@inherits LayoutComponentBase
+
+<MudLayout>
+    <MudAppBar Elevation="3" Dense="false" Style="background: linear-gradient(135deg, #007F3B 0%, #005a2a 100%);">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="@ToggleDrawer" />
+        <img src="images/nvsulogo.png" alt="NVSU Logo" style="height:38px; margin-left:8px; margin-right:12px;" />
+        <div>
+            <MudText Typo="Typo.h6" Style="font-family:'Source Serif 4',serif; font-weight:700; color:#fff; line-height:1.2;">
+                Career Path <span style="color:#FFD701;">Recommendation System</span>
+            </MudText>
+            <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.8); font-size:0.7rem;">
+                College of Information Technology Education, NVSU - Bayombong
+            </MudText>
+        </div>
+        <MudSpacer />
+        <MudChip T="string" Size="Size.Small" Style="background:rgba(255,255,255,0.15); color:#FFD701; font-weight:600;">
+            NVSU CITE
+        </MudChip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Variant="DrawerVariant.Mini"
+               OpenMiniOnHover="true">
+        <div class="pa-3 text-center" style="border-bottom:1px solid #e0e0e0;">
+            <img src="images/nvsulogo.png" alt="NVSU" style="height:30px;" />
+        </div>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent Class="pa-4 pb-8" Style="max-width:1280px;">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+}

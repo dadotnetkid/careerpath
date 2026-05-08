@@ -1,0 +1,231 @@
+@page "/insights"
+@inject HttpClient Http
+
+<PageTitle>Model Insights</PageTitle>
+
+<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
+    Model Insights
+</MudText>
+
+@if (notTrained)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mb-4">
+        <strong>Model not yet trained.</strong> Run <code>dotnet run --project src/CareerPath.ML</code> first to generate model metrics.
+    </MudAlert>
+}
+else if (isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+else if (comparison != null)
+{
+    @* Hero Stats *@
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="6" md="3">
+            <MudPaper Elevation="3" Class="pa-4 text-center" Style="border-radius:12px;">
+                <MudText Typo="Typo.h3" Color="Color.Primary" Style="font-family:'Source Serif 4',serif; font-weight:700;">
+                    @((comparison.RandomForest.Accuracy * 100).ToString("F1"))%
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform:uppercase; letter-spacing:1px;">Accuracy</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Elevation="3" Class="pa-4 text-center" Style="border-radius:12px;">
+                <MudText Typo="Typo.h3" Color="Color.Primary" Style="font-family:'Source Serif 4',serif; font-weight:700;">
+                    @((comparison.RandomForest.Precision * 100).ToString("F1"))%
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform:uppercase; letter-spacing:1px;">Precision</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Elevation="3" Class="pa-4 text-center" Style="border-radius:12px;">
+                <MudText Typo="Typo.h3" Color="Color.Primary" Style="font-family:'Source Serif 4',serif; font-weight:700;">
+                    @((comparison.RandomForest.Recall * 100).ToString("F1"))%
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform:uppercase; letter-spacing:1px;">Recall</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Elevation="3" Class="pa-4 text-center" Style="border-radius:12px;">
+                <MudText Typo="Typo.h3" Color="Color.Primary" Style="font-family:'Source Serif 4',serif; font-weight:700;">
+                    @((comparison.RandomForest.F1Score * 100).ToString("F1"))%
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="text-transform:uppercase; letter-spacing:1px;">F1 Score</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Model Comparison Table *@
+    <MudCard Elevation="3" Class="mb-6">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">Algorithm Comparison (Objective 6)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent Class="pa-0">
+            <MudSimpleTable Hover="true" Striped="true" Dense="true">
+                <thead>
+                    <tr>
+                        <th>Algorithm</th>
+                        <th>Accuracy</th>
+                        <th>Precision</th>
+                        <th>Recall</th>
+                        <th>F1 Score</th>
+                        <th>AUC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in GetModelsRanked())
+                    {
+                        <tr style="@(m == bestModel ? "background:#e6f2ec; font-weight:700;" : "")">
+                            <td>@m.AlgorithmName @(m == bestModel ? " (Best)" : "")</td>
+                            <td>@((m.Accuracy * 100).ToString("F2"))%</td>
+                            <td>@((m.Precision * 100).ToString("F2"))%</td>
+                            <td>@((m.Recall * 100).ToString("F2"))%</td>
+                            <td>@((m.F1Score * 100).ToString("F2"))%</td>
+                            <td>@((m.AreaUnderRocCurve * 100).ToString("F2"))%</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudCardContent>
+    </MudCard>
+
+    @* Confusion Matrix *@
+    <MudCard Elevation="3" Class="mb-6">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">Confusion Matrix (Random Forest)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (comparison.RandomForest.ConfusionMatrix is { Length: 2 })
+            {
+                var cm = comparison.RandomForest.ConfusionMatrix;
+                <div class="d-flex justify-center">
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Align="Align.Center" Class="mb-2">Predicted</MudText>
+                        <MudSimpleTable Style="max-width:400px;" Dense="true" Bordered="true">
+                            <thead>
+                                <tr>
+                                    <th style="background:#007F3B; color:#fff;"></th>
+                                    <th style="background:#007F3B; color:#fff; text-align:center;">ICT-Aligned</th>
+                                    <th style="background:#007F3B; color:#fff; text-align:center;">Non-ICT-Aligned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="background:#f8f9fa; font-weight:600;">ICT-Aligned<br /><small>(Actual)</small></td>
+                                    <td style="background:#d4edda; color:#155724; font-size:1.2rem; font-weight:700; text-align:center;">@cm[0][0]</td>
+                                    <td style="background:#f8d7da; color:#721c24; font-size:1.2rem; font-weight:700; text-align:center;">@cm[0][1]</td>
+                                </tr>
+                                <tr>
+                                    <td style="background:#f8f9fa; font-weight:600;">Non-ICT-Aligned<br /><small>(Actual)</small></td>
+                                    <td style="background:#f8d7da; color:#721c24; font-size:1.2rem; font-weight:700; text-align:center;">@cm[1][0]</td>
+                                    <td style="background:#d4edda; color:#155724; font-size:1.2rem; font-weight:700; text-align:center;">@cm[1][1]</td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </div>
+                </div>
+            }
+        </MudCardContent>
+    </MudCard>
+
+    @* Feature Importance *@
+    <MudCard Elevation="3" Class="mb-6">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">Feature Importance (Random Forest - PFI)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (comparison.RandomForest.FeatureImportances?.Any() == true)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Relative contribution of each feature to the model's prediction accuracy, computed via
+                    Permutation Feature Importance (analogous to Mean Decrease in Accuracy).
+                </MudText>
+                @foreach (var fi in comparison.RandomForest.FeatureImportances.OrderByDescending(f => f.Importance))
+                {
+                    <div class="d-flex align-center mb-3" style="gap:12px;">
+                        <MudText Typo="Typo.body2" Style="width:130px; text-align:right; font-weight:500; flex-shrink:0;">@fi.FeatureName</MudText>
+                        <MudProgressLinear Value="@fi.Importance" Rounded="true" Size="Size.Large" Color="Color.Primary"
+                                           Style="flex:1; height:28px;" />
+                        <MudText Typo="Typo.body2" Color="Color.Primary" Style="width:60px; font-weight:700; flex-shrink:0;">@fi.Importance.ToString("F2")%</MudText>
+                    </div>
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Feature importance data not available.</MudText>
+            }
+        </MudCardContent>
+    </MudCard>
+
+    @* Training Info *@
+    <MudCard Elevation="2" Class="mb-4">
+        <MudCardContent>
+            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">Training Information</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="4">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Training Rows</MudText>
+                    <MudText Typo="Typo.h6">@comparison.RandomForest.TrainingRows</MudText>
+                </MudItem>
+                <MudItem xs="4">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Test Rows</MudText>
+                    <MudText Typo="Typo.h6">@comparison.RandomForest.TestRows</MudText>
+                </MudItem>
+                <MudItem xs="4">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Trained At</MudText>
+                    <MudText Typo="Typo.h6">@comparison.RandomForest.TrainedAt.ToString("g")</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+}
+
+@code {
+    private ModelComparison? comparison;
+    private ModelMetrics? bestModel;
+    private bool isLoading = true;
+    private bool notTrained;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var response = await Http.GetAsync("api/metrics/comparison");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                notTrained = true;
+            }
+            else
+            {
+                response.EnsureSuccessStatusCode();
+                comparison = await response.Content.ReadFromJsonAsync<ModelComparison>();
+                if (comparison != null)
+                    bestModel = GetModelsRanked().First();
+            }
+        }
+        catch
+        {
+            notTrained = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private List<ModelMetrics> GetModelsRanked()
+    {
+        if (comparison == null) return new();
+        return new List<ModelMetrics>
+        {
+            comparison.RandomForest,
+            comparison.DecisionTree,
+            comparison.LogisticRegression
+        }.OrderByDescending(m => m.Accuracy).ToList();
+    }
+}

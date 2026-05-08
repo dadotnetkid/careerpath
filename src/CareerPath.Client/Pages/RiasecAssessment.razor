@@ -1,0 +1,643 @@
+@page "/riasec"
+@inject HttpClient Http
+
+<PageTitle>Career Path Assessment</PageTitle>
+
+<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
+    Career Path Assessment
+</MudText>
+
+@if (isLoadingQuestions)
+{
+    <div class="d-flex justify-center pa-12">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else if (finalResult != null)
+{
+    @* ══════════ FINAL REPORT ══════════ *@
+    <MudPaper Class="pa-6 mb-4" Style="background: linear-gradient(135deg, #007F3B 0%, #005a2a 100%); border-radius:12px;">
+        <MudText Typo="Typo.h4" Style="color:#fff; font-family:'Source Serif 4',serif; font-weight:700;" Class="mb-2">
+            Your Career Path Report
+        </MudText>
+        <MudText Typo="Typo.h5" Style="color:#FFD701; font-weight:700;">
+            RIASEC: @finalResult.DominantCode — @string.Join(" / ", finalResult.TopDimensions)
+        </MudText>
+        <MudText Typo="Typo.subtitle1" Style="color:rgba(255,255,255,0.9);" Class="mt-1">
+            Career Clarity: @finalResult.Clarity.TotalScore/25 — @finalResult.Clarity.ClarityLabel
+        </MudText>
+    </MudPaper>
+
+    <MudGrid Spacing="4" Class="mb-4">
+        @* RIASEC Score Bars *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3">
+                <MudCardHeader Style="background:#007F3B; color:#fff;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-2" Style="vertical-align:middle;" />
+                            RIASEC Dimension Scores
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-6">
+                    @foreach (var dim in GetScoreList())
+                    {
+                        <div class="mb-4">
+                            <div class="d-flex justify-space-between mb-1">
+                                <MudText Typo="Typo.body1" Style="font-weight:600;">@dim.Name (@dim.Code)</MudText>
+                                <MudText Typo="Typo.body1" Style="font-weight:700;">@dim.Score / 10</MudText>
+                            </div>
+                            <MudProgressLinear Value="@(dim.Score * 10)" Rounded="true" Size="Size.Large" Color="@dim.Color" />
+                        </div>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Career Clarity Breakdown *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="3" Style="height:100%;">
+                <MudCardHeader Style="background:#007F3B; color:#fff;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-2" Style="vertical-align:middle;" />
+                            Career Clarity Breakdown
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-6">
+                    @foreach (var cr in new[] {
+                        ("A. Career Fit", finalResult.Clarity.FitScore),
+                        ("B. Growth Excitement", finalResult.Clarity.ExcitementScore),
+                        ("C. Genuine Interest", finalResult.Clarity.GenuineInterestScore),
+                        ("D. Salary-Neutral", finalResult.Clarity.SalaryNeutralScore),
+                        ("E. RIASEC Alignment", finalResult.Clarity.RiasecAlignmentScore)
+                    })
+                    {
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.body1">@cr.Item1</MudText>
+                            <div class="d-flex align-center gap-2" style="min-width:180px;">
+                                <MudProgressLinear Value="@(cr.Item2 / 5.0 * 100)" Rounded="true" Size="Size.Small" Color="Color.Primary" Style="flex:1;" />
+                                <MudText Typo="Typo.body2" Style="font-weight:600; min-width:40px;">@cr.Item2/5</MudText>
+                            </div>
+                        </div>
+                    }
+
+                    <MudDivider Class="my-3" />
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.h6" Style="font-weight:700;">Total</MudText>
+                        <MudText Typo="Typo.h6" Style="font-weight:700;" Color="Color.Primary">@finalResult.Clarity.TotalScore / 25</MudText>
+                    </div>
+                    <MudChip T="string" Color="@GetClarityColor(finalResult.Clarity.ClarityLabel)" Size="Size.Large" Class="mt-2">
+                        @finalResult.Clarity.ClarityLabel
+                    </MudChip>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    @* Matched Job Roles *@
+    <MudCard Elevation="3" Class="mb-4">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icons.Material.Filled.Work" Class="mr-2" Style="vertical-align:middle;" />
+                    Top Matched Job Roles (from Alumni Data)
+                </MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent Class="pa-4">
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Job Title</th>
+                        <th>Field</th>
+                        <th>Alignment</th>
+                        <th>Alumni</th>
+                        <th>Match</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (job, i) in finalResult.MatchedJobs.Select((j, i) => (j, i)))
+                    {
+                        <tr>
+                            <td>@(i + 1)</td>
+                            <td><strong>@job.JobTitle</strong></td>
+                            <td>@job.FieldOfIndustry</td>
+                            <td>@job.CareerAlignment</td>
+                            <td>@job.AlumniCount</td>
+                            <td>
+                                <MudProgressLinear Value="@job.MatchScore" Rounded="true" Size="Size.Small" Color="Color.Primary" Style="min-width:80px;" />
+                                <MudText Typo="Typo.caption">@job.MatchScore%</MudText>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudCardContent>
+    </MudCard>
+
+    @* AI Analysis *@
+    <MudCard Elevation="3" Class="mb-4">
+        <MudCardHeader Style="background:#007F3B; color:#fff;">
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" Style="vertical-align:middle;" />
+                    Detailed AI Career Analysis (GPT-4o mini)
+                </MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent Class="pa-6">
+            <MudText Typo="Typo.body1" Style="white-space:pre-line; line-height:1.8;">
+                @finalResult.AiAnalysis
+            </MudText>
+        </MudCardContent>
+    </MudCard>
+
+    <div class="d-flex justify-center mb-4">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.Refresh" OnClick="ResetAll">
+            Retake Assessment
+        </MudButton>
+    </div>
+}
+else
+{
+    @* ══════════ WIZARD STEPS ══════════ *@
+
+    @* Step Indicator *@
+    <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
+        <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            @for (int s = 0; s < stepLabels.Length; s++)
+            {
+                var stepIdx = s;
+                var isActive = stepIdx == wizardStep;
+                var isDone = stepIdx < wizardStep;
+                <MudChip T="string" Size="Size.Medium"
+                         Color="@(isActive ? Color.Primary : isDone ? Color.Success : Color.Default)"
+                         Variant="@(isActive ? Variant.Filled : Variant.Outlined)">
+                    @if (isDone) { <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="mr-1" /> }
+                    Step @(stepIdx + 1): @stepLabels[stepIdx]
+                </MudChip>
+            }
+        </div>
+    </MudPaper>
+
+    @* ── STEP 1: RIASEC Quiz ── *@
+    @if (wizardStep == 0)
+    {
+        @if (currentQuestion == 0)
+        {
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardContent Class="pa-6">
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">RIASEC Interest Assessment</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        The RIASEC model identifies six personality types: <strong>Realistic, Investigative, Artistic, Social, Enterprising,</strong> and <strong>Conventional</strong>.
+                    </MudText>
+                    <MudText Typo="Typo.body1">
+                        Answer <strong>10 scenario-based questions</strong>. Pick the option that best describes you. No right or wrong answers!
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        }
+
+        <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
+            <div class="d-flex justify-space-between align-center mb-2">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Question @(currentQuestion + 1) of @questions.Count</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@riasecAnswers.Count / @questions.Count answered</MudText>
+            </div>
+            <MudProgressLinear Value="@((double)riasecAnswers.Count / questions.Count * 100)" Rounded="true" Size="Size.Medium" Color="Color.Primary" />
+        </MudPaper>
+
+        @if (questions.Count > 0)
+        {
+            var q = questions[currentQuestion];
+            <MudCard Elevation="3" Class="mb-4">
+                <MudCardHeader Style="background:#007F3B; color:#fff;">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Scenario @q.Id</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-6">
+                    <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight:600; line-height:1.5;">@q.Scenario</MudText>
+                    <MudRadioGroup T="string" Value="@GetRiasecAnswer(q.Id)" ValueChanged="@(val => SetRiasecAnswer(q.Id, val))">
+                        @foreach (var opt in q.Options)
+                        {
+                            <MudPaper Class="pa-3 mb-2" Elevation="@(GetRiasecAnswer(q.Id) == opt.Key ? 2 : 0)"
+                                      Style="@($"border-radius:8px; border:2px solid {(GetRiasecAnswer(q.Id) == opt.Key ? "#007F3B" : "#e0e0e0")}; cursor:pointer; transition:all 0.2s;")">
+                                <MudRadio T="string" Value="@opt.Key" Color="Color.Primary" Dense="true">
+                                    <MudText Typo="Typo.body1">@opt.Text</MudText>
+                                </MudRadio>
+                            </MudPaper>
+                        }
+                    </MudRadioGroup>
+                </MudCardContent>
+            </MudCard>
+
+            <div class="d-flex justify-space-between mb-4">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(currentQuestion == 0)"
+                           StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="PrevQuestion">Previous</MudButton>
+                @if (currentQuestion < questions.Count - 1)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="NextQuestion"
+                               Disabled="@(GetRiasecAnswer(q.Id) == null)">Next</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="FinishRiasecStep"
+                               Disabled="@(riasecAnswers.Count < questions.Count)">Continue to Career Clarity</MudButton>
+                }
+            </div>
+
+            <div class="d-flex justify-center flex-wrap gap-2 mb-4">
+                @for (int i = 0; i < questions.Count; i++)
+                {
+                    var idx = i;
+                    var answered = riasecAnswers.ContainsKey(questions[idx].Id);
+                    var isCurrent = idx == currentQuestion;
+                    <MudIconButton Icon="@(answered ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
+                                   Color="@(isCurrent ? Color.Primary : answered ? Color.Success : Color.Default)"
+                                   Size="Size.Small" OnClick="@(() => currentQuestion = idx)" />
+                }
+            </div>
+        }
+    }
+
+    @* ── STEP 2: Career Clarity ── *@
+    else if (wizardStep == 1)
+    {
+        <MudCard Elevation="3" Class="mb-4">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Career Clarity Assessment</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-6">
+                <MudText Typo="Typo.body1" Class="mb-2">
+                    Your dominant RIASEC code is <strong>@computedCode</strong> (@string.Join(", ", computedDimensions)).
+                    Now let's assess your career clarity.
+                </MudText>
+
+                @* Pick 3 desired roles *@
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">Select your top 3 desired career roles:</MudText>
+                @for (int r = 0; r < 3; r++)
+                {
+                    var roleIdx = r;
+                    <MudSelect T="string" Label="@($"Role {roleIdx + 1}")" Variant="Variant.Outlined" Class="mb-3"
+                               Value="@GetDesiredRole(roleIdx)" ValueChanged="@(val => SetDesiredRole(roleIdx, val))">
+                        @foreach (var role in suggestedRoles)
+                        {
+                            <MudSelectItem Value="@role">@role</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+
+                @if (desiredRoles.Count(r => !string.IsNullOrEmpty(r)) >= 3)
+                {
+                    @* A. Career Fit Ratings *@
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">A. How well does each role match your personality? (1-5)</MudText>
+                    @for (int r = 0; r < 3; r++)
+                    {
+                        var rIdx = r;
+                        <div class="d-flex align-center gap-3 mb-2">
+                            <MudText Style="min-width:200px;">@desiredRoles[rIdx]</MudText>
+                            <MudRating @bind-SelectedValue="fitRatings[rIdx]" MaxValue="5" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@GetFitLabel(fitRatings[rIdx])</MudText>
+                        </div>
+                    }
+
+                    @* B. Excitement Ratings *@
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">B. How excited are you about growing in each role? (1-5)</MudText>
+                    @for (int r = 0; r < 3; r++)
+                    {
+                        var rIdx = r;
+                        <div class="d-flex align-center gap-3 mb-2">
+                            <MudText Style="min-width:200px;">@desiredRoles[rIdx]</MudText>
+                            <MudRating @bind-SelectedValue="excitementRatings[rIdx]" MaxValue="5" Color="Color.Warning" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@GetExcitementLabel(excitementRatings[rIdx])</MudText>
+                        </div>
+                    }
+
+                    @* C. Motivation *@
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">C. Career Choice Motivation (1-5)</MudText>
+                    <div class="mb-3">
+                        <MudText Typo="Typo.body1" Class="mb-1">I am genuinely interested in the type of work this career involves:</MudText>
+                        <MudRating @bind-SelectedValue="genuineInterest" MaxValue="5" Color="Color.Primary" />
+                    </div>
+                    <div class="mb-3">
+                        <MudText Typo="Typo.body1" Class="mb-1">This career is popular / high-paying / in demand:</MudText>
+                        <MudRating @bind-SelectedValue="popularityMotivation" MaxValue="5" Color="Color.Primary" />
+                    </div>
+                    <div class="mb-3">
+                        <MudText Typo="Typo.body1" Class="mb-1">This career is expected by family or others:</MudText>
+                        <MudRating @bind-SelectedValue="familyExpectation" MaxValue="5" Color="Color.Primary" />
+                    </div>
+
+                    @* D. Salary-Neutral Choice *@
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">D. If salary and job availability were equal, which career would you choose?</MudText>
+                    <MudRadioGroup T="int" @bind-Value="salaryNeutralChoice">
+                        @for (int r = 0; r < 3; r++)
+                        {
+                            var rIdx = r;
+                            <MudRadio T="int" Value="@rIdx" Color="Color.Primary">@desiredRoles[rIdx]</MudRadio>
+                        }
+                    </MudRadioGroup>
+                }
+            </MudCardContent>
+        </MudCard>
+
+        <div class="d-flex justify-space-between mb-4">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => wizardStep = 0)">Back to RIASEC</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick="@(() => wizardStep = 2)"
+                       Disabled="@(!ClarityStepComplete)">Continue to Refinement</MudButton>
+        </div>
+    }
+
+    @* ── STEP 3: GWA + Skills Refinement ── *@
+    else if (wizardStep == 2)
+    {
+        <MudCard Elevation="3" Class="mb-4">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Academic Profile Refinement</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-6">
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">GWA Category</MudText>
+                <MudSelect T="string" @bind-Value="gwaCategory" Label="Select your GWA range" Variant="Variant.Outlined" Class="mb-4"
+                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Grade">
+                    <MudSelectItem Value="@("Outstanding")">Outstanding (1.00 - 1.25)</MudSelectItem>
+                    <MudSelectItem Value="@("Very Satisfactory")">Very Satisfactory (1.26 - 2.00)</MudSelectItem>
+                    <MudSelectItem Value="@("Satisfactory")">Satisfactory (2.01 - 2.75)</MudSelectItem>
+                    <MudSelectItem Value="@("Fair")">Fair (2.76 - 3.00)</MudSelectItem>
+                </MudSelect>
+
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">Competencies / Skills</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Select all skills that apply to you:</MudText>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var skill in availableSkills)
+                    {
+                        var s = skill;
+                        var isSelected = selectedSkills.Contains(s);
+                        <MudChip T="string" Color="@(isSelected ? Color.Primary : Color.Default)"
+                                 Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => ToggleSkill(s))" Style="cursor:pointer;">
+                            @s
+                        </MudChip>
+                    }
+                </div>
+            </MudCardContent>
+        </MudCard>
+
+        <div class="d-flex justify-space-between mb-4">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => wizardStep = 1)">Back to Clarity</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Assessment" OnClick="SubmitFullAssessment"
+                       Disabled="@(!RefinementComplete || isSubmitting)">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Color="Color.Inherit" Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Analyzing with AI...</span>
+                }
+                else
+                {
+                    <span>Get My Career Report</span>
+                }
+            </MudButton>
+        </div>
+    }
+
+    @if (errorMessage != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@errorMessage</MudAlert>
+    }
+}
+
+<style>
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 12px; }
+</style>
+
+@code {
+    // ── Wizard State ──
+    private int wizardStep = 0;
+    private static readonly string[] stepLabels = { "RIASEC Quiz", "Career Clarity", "GWA & Skills" };
+
+    // ── Step 1: RIASEC ──
+    private List<RiasecQuestion> questions = new();
+    private Dictionary<int, string> riasecAnswers = new();
+    private int currentQuestion = 0;
+    private bool isLoadingQuestions = true;
+
+    // Computed after Step 1
+    private string computedCode = "";
+    private List<string> computedDimensions = new();
+    private List<string> suggestedRoles = new();
+
+    // ── Step 2: Career Clarity ──
+    private string[] desiredRoles = new string[3] { "", "", "" };
+    private int[] fitRatings = new int[3] { 0, 0, 0 };
+    private int[] excitementRatings = new int[3] { 0, 0, 0 };
+    private int genuineInterest = 0;
+    private int popularityMotivation = 0;
+    private int familyExpectation = 0;
+    private int salaryNeutralChoice = 0;
+
+    // ── Step 3: Refinement ──
+    private string gwaCategory = "";
+    private List<string> availableSkills = new();
+    private HashSet<string> selectedSkills = new();
+
+    // ── Final ──
+    private FullAssessmentResult? finalResult;
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private bool ClarityStepComplete =>
+        desiredRoles.All(r => !string.IsNullOrEmpty(r)) &&
+        fitRatings.All(r => r >= 1) &&
+        excitementRatings.All(r => r >= 1) &&
+        genuineInterest >= 1;
+
+    private bool RefinementComplete =>
+        !string.IsNullOrEmpty(gwaCategory) && selectedSkills.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var questionsTask = Http.GetFromJsonAsync<List<RiasecQuestion>>("api/riasec/questions");
+            var skillsTask = Http.GetFromJsonAsync<List<string>>("api/riasec/skills");
+            await Task.WhenAll(questionsTask, skillsTask);
+            questions = questionsTask.Result ?? new();
+            availableSkills = skillsTask.Result ?? new();
+        }
+        catch
+        {
+            errorMessage = "Failed to load assessment data. Please ensure the server is running.";
+        }
+        finally
+        {
+            isLoadingQuestions = false;
+        }
+    }
+
+    // ── RIASEC Helpers ──
+    private string? GetRiasecAnswer(int qId) => riasecAnswers.TryGetValue(qId, out var v) ? v : null;
+    private void SetRiasecAnswer(int qId, string val) => riasecAnswers[qId] = val;
+    private void NextQuestion() { if (currentQuestion < questions.Count - 1) currentQuestion++; }
+    private void PrevQuestion() { if (currentQuestion > 0) currentQuestion--; }
+
+    private async Task FinishRiasecStep()
+    {
+        // Compute RIASEC code locally for display, then fetch suggested roles
+        var scores = new Dictionary<string, int> { ["R"]=0,["I"]=0,["A"]=0,["S"]=0,["E"]=0,["C"]=0 };
+        foreach (var v in riasecAnswers.Values)
+            if (scores.ContainsKey(v)) scores[v]++;
+
+        var ranked = scores.OrderByDescending(x => x.Value).Take(3).ToList();
+        computedCode = string.Join("", ranked.Select(x => x.Key));
+        var nameMap = new Dictionary<string, string>
+        {
+            ["R"]="Realistic",["I"]="Investigative",["A"]="Artistic",
+            ["S"]="Social",["E"]="Enterprising",["C"]="Conventional"
+        };
+        computedDimensions = ranked.Select(x => nameMap[x.Key]).ToList();
+
+        try
+        {
+            suggestedRoles = await Http.GetFromJsonAsync<List<string>>($"api/riasec/roles/{computedCode}") ?? new();
+        }
+        catch
+        {
+            suggestedRoles = new() { "Software Developer", "IT Support", "Network Administrator", "Data Analyst",
+                "UI/UX Designer", "IT Project Manager", "Database Administrator", "Systems Administrator",
+                "QA Analyst", "Business Analyst" };
+        }
+
+        wizardStep = 1;
+    }
+
+    // ── Clarity Helpers ──
+    private string GetDesiredRole(int idx) => idx < desiredRoles.Length ? desiredRoles[idx] : "";
+    private void SetDesiredRole(int idx, string val) { if (idx < desiredRoles.Length) desiredRoles[idx] = val; }
+
+    private static string GetFitLabel(int v) => v switch
+    {
+        1 => "Very Poor Match", 2 => "Poor Match", 3 => "Fair", 4 => "Good Match", 5 => "Excellent Match", _ => ""
+    };
+    private static string GetExcitementLabel(int v) => v switch
+    {
+        1 => "Not Excited", 2 => "Slightly", 3 => "Moderate", 4 => "Very Excited", 5 => "Extremely Excited", _ => ""
+    };
+
+    // ── Skills ──
+    private void ToggleSkill(string skill)
+    {
+        if (!selectedSkills.Remove(skill))
+            selectedSkills.Add(skill);
+    }
+
+    // ── Submit ──
+    private async Task SubmitFullAssessment()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            var input = new FullAssessmentInput
+            {
+                RiasecAnswers = riasecAnswers,
+                CareerClarity = new CareerClarityInput
+                {
+                    DesiredRoles = desiredRoles.ToList(),
+                    FitRatings = fitRatings.ToList(),
+                    ExcitementRatings = excitementRatings.ToList(),
+                    GenuineInterest = genuineInterest,
+                    PopularityMotivation = popularityMotivation,
+                    FamilyExpectation = familyExpectation,
+                    SalaryNeutralChoice = salaryNeutralChoice
+                },
+                GwaCategory = gwaCategory,
+                Skills = selectedSkills.ToList()
+            };
+
+            var response = await Http.PostAsJsonAsync("api/riasec/assess", input);
+            if (response.IsSuccessStatusCode)
+            {
+                finalResult = await response.Content.ReadFromJsonAsync<FullAssessmentResult>();
+            }
+            else
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Assessment failed: {body}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // ── Reset ──
+    private void ResetAll()
+    {
+        wizardStep = 0;
+        currentQuestion = 0;
+        riasecAnswers.Clear();
+        computedCode = "";
+        computedDimensions.Clear();
+        suggestedRoles.Clear();
+        desiredRoles = new string[3] { "", "", "" };
+        fitRatings = new int[3] { 0, 0, 0 };
+        excitementRatings = new int[3] { 0, 0, 0 };
+        genuineInterest = 0;
+        popularityMotivation = 0;
+        familyExpectation = 0;
+        salaryNeutralChoice = 0;
+        gwaCategory = "";
+        selectedSkills.Clear();
+        finalResult = null;
+        errorMessage = null;
+    }
+
+    // ── Score Display ──
+    private record ScoreDisplay(string Code, string Name, int Score, Color Color);
+
+    private List<ScoreDisplay> GetScoreList()
+    {
+        if (finalResult == null) return new();
+        var s = finalResult.RiasecScores;
+        return new()
+        {
+            new("R", "Realistic", s.Realistic, Color.Success),
+            new("I", "Investigative", s.Investigative, Color.Info),
+            new("A", "Artistic", s.Artistic, Color.Secondary),
+            new("S", "Social", s.Social, Color.Warning),
+            new("E", "Enterprising", s.Enterprising, Color.Error),
+            new("C", "Conventional", s.Conventional, Color.Dark)
+        };
+    }
+
+    private static Color GetClarityColor(string label) => label switch
+    {
+        "Very High Career Clarity" => Color.Success,
+        "High Career Clarity" => Color.Primary,
+        "Moderate / Needs Guidance" => Color.Warning,
+        "Low Career Clarity" => Color.Error,
+        _ => Color.Dark
+    };
+}
+
