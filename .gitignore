@@ -100,8 +100,8 @@ models/*.zip
 # =====================================================
 .claude/
 CLAUDE.md
-CLAUDE_CODE_HANDOFF.md
-MANUSCRIPT_EDITS.md
+requirements/CLAUDE_CODE_HANDOFF.md
+requirements/MANUSCRIPT_EDITS.md
 
 # =====================================================
 # Misc

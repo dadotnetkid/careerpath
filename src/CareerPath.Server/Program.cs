@@ -115,7 +115,25 @@ try
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
+    var dbCreated = db.Database.EnsureCreated();
+    Console.WriteLine($"DB EnsureCreated created new file: {dbCreated} (false means DB already existed)");
+
+    // Defensive check: if the DB pre-dates the IdentityDbContext switch
+    // (commit e536117), the AspNetUsers table will be missing and login will
+    // 500. EnsureCreated does not retro-add tables to an existing DB, so we
+    // surface this explicitly instead of silently failing at sign-in.
+    var identityTableCount = db.Database.SqlQueryRaw<int>(
+        "SELECT COUNT(*) AS Value FROM sqlite_master WHERE type='table' AND name='AspNetUsers'").FirstOrDefault();
+    if (identityTableCount == 0)
+    {
+        Console.Error.WriteLine(
+            "WARNING: AspNetUsers table is MISSING from existing DB. " +
+            "Delete App_Data/careerpath.db on the server and restart the AppPool to rebuild with Identity tables.");
+    }
+    else
+    {
+        Console.WriteLine("Identity tables present.");
+    }
 
     // Seed the single admin user from configuration. Idempotent: if the user
     // already exists we leave the password alone (so a future password

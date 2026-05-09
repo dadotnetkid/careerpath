@@ -43,8 +43,11 @@ Then open **http://localhost:5001** in your browser.
 CiteTracker/
 ├── CareerPath.sln                   Solution file (4 projects)
 ├── README.md                        This file
-├── MANUSCRIPT_EDITS.md              Required thesis manuscript changes
-├── ARCHITECTURE.md                  Full technical documentation
+├── requirements/                    Project specs, handoff notes, architecture, manuscript edits
+│   ├── AGENT_CONTRACT_SPEC*.md      Locked contracts (V1–V4) for the GTS 3 feature pipeline
+│   ├── ARCHITECTURE.md              End-to-end prediction walkthrough
+│   ├── CLAUDE_CODE_HANDOFF.md       Full project brief (gitignored)
+│   └── MANUSCRIPT_EDITS.md          Required thesis manuscript changes (gitignored)
 ├── data/
 │   ├── alumni_raw.csv               Legacy CHED GTS data (kept for traceability, not used by code)
 │   ├── alumni.csv                   Legacy cleaned dataset (kept for traceability, not used by code)

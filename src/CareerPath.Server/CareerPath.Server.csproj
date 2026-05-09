@@ -29,6 +29,9 @@
     <Content Include="MLModel\*.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\data\alumni_gts3.csv" Link="data\alumni_gts3.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="appsettings.Production.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" Condition="Exists('appsettings.Production.json')" />
+    <!-- Pre-create logs/ so AspNetCoreModuleV2 has somewhere to write stdout_*.log
+         before any runtime mkdir attempt. Folder needs Modify rights for AppPool. -->
+    <Content Include="logs\.gitkeep" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
