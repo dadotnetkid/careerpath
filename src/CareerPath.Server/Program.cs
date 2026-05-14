@@ -6,6 +6,20 @@ using CareerPath.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// One-shot SQLite -> SQL Server migration. Invoke as:
+//   dotnet run --project src/CareerPath.Server -- migrate-from-sqlite [path-to-careerpath.db]
+// Copies PredictionLogs, TrainingRuns, TrainingFolds into the configured SQL Server, then exits.
+if (args.Length > 0 && string.Equals(args[0], "migrate-from-sqlite", StringComparison.OrdinalIgnoreCase))
+{
+    var sqlitePath = args.Length > 1
+        ? args[1]
+        : Path.Combine(builder.Environment.ContentRootPath, "App_Data", "careerpath.db");
+    var cs = builder.Configuration.GetConnectionString("Default")
+        ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured.");
+    var exit = await SqliteToSqlServerMigrator.RunAsync(sqlitePath, cs);
+    return exit;
+}
+
 // Resolve content paths. In production the published folder contains data/ and MLModel/
 // next to the binary. In dev (running from bin/Debug/...), the data files live at the
 // solution root, so we fall back to walking up to find CareerPath.sln.
@@ -50,13 +64,13 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "CareerPath API", Version = "v1" });
 });
 
-// SQLite DB lives in App_Data so we can give the AppPool identity a tightly-scoped
-// write permission instead of opening up the whole site folder.
-var dbDir = Path.Combine(builder.Environment.ContentRootPath, "App_Data");
-Directory.CreateDirectory(dbDir);
-var dbPath = Path.Combine(dbDir, "careerpath.db");
-Console.WriteLine($"DB path: {dbPath}");
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+// SQL Server connection. The connection string lives in ConnectionStrings:Default
+// (see appsettings.json / appsettings.Production.json). EnsureCreated will materialize
+// the schema on first startup if the target database is empty.
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured.");
+Console.WriteLine("DB: SQL Server (see ConnectionStrings:Default)");
+builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 
 // ── ASP.NET Core Identity (admin auth, cookie-based) ──
 //
@@ -118,17 +132,17 @@ try
     var dbCreated = db.Database.EnsureCreated();
     Console.WriteLine($"DB EnsureCreated created new file: {dbCreated} (false means DB already existed)");
 
-    // Defensive check: if the DB pre-dates the IdentityDbContext switch
-    // (commit e536117), the AspNetUsers table will be missing and login will
-    // 500. EnsureCreated does not retro-add tables to an existing DB, so we
-    // surface this explicitly instead of silently failing at sign-in.
+    // Defensive check: if the target DB pre-dates the IdentityDbContext switch,
+    // the AspNetUsers table will be missing and login will 500. EnsureCreated
+    // does not retro-add tables to an existing DB, so we surface this explicitly
+    // instead of silently failing at sign-in.
     var identityTableCount = db.Database.SqlQueryRaw<int>(
-        "SELECT COUNT(*) AS Value FROM sqlite_master WHERE type='table' AND name='AspNetUsers'").FirstOrDefault();
+        "SELECT CASE WHEN OBJECT_ID(N'[dbo].[AspNetUsers]', N'U') IS NULL THEN 0 ELSE 1 END AS Value").FirstOrDefault();
     if (identityTableCount == 0)
     {
         Console.Error.WriteLine(
-            "WARNING: AspNetUsers table is MISSING from existing DB. " +
-            "Delete App_Data/careerpath.db on the server and restart the AppPool to rebuild with Identity tables.");
+            "WARNING: AspNetUsers table is MISSING from the target SQL Server database. " +
+            "Drop the CareerPath database (or its tables) and restart the AppPool to rebuild with Identity tables.");
     }
     else
     {
@@ -211,3 +225,4 @@ app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+return 0;

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace CareerPath.Server.Services;
 
 /// <summary>
-/// Ingests cv_metrics.json (produced by the trainer) into the SQLite TrainingRun /
+/// Ingests cv_metrics.json (produced by the trainer) into the TrainingRun /
 /// TrainingFold tables, and exposes the latest + history queries used by
 /// /api/training/* endpoints. Idempotent: re-ingesting the same file is a no-op.
 /// </summary>
