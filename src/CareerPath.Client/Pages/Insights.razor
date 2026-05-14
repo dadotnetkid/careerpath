@@ -306,35 +306,98 @@ else if (comparison != null)
         </MudCard>
     }
 
-    @* Feature Importance *@
+    @* Feature Importance — PFI alongside MDI for tree models *@
     <MudCard Elevation="3" Class="mb-6">
         <MudCardHeader Style="background:#007F3B; color:#fff;">
             <CardHeaderContent>
-                <MudText Typo="Typo.h6">Feature Importance (Random Forest - PFI)</MudText>
+                <MudText Typo="Typo.h6">Feature Importance (Random Forest)</MudText>
             </CardHeaderContent>
         </MudCardHeader>
         <MudCardContent>
-            @if (comparison.RandomForest.FeatureImportances?.Any() == true)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                    Relative contribution of each of the 6 input features (Year Graduated, GWA, Honors, Competencies,
-                    Career Clarity, Interest) to the model's prediction accuracy, computed via
-                    Permutation Feature Importance (analogous to Mean Decrease in Accuracy).
-                </MudText>
-                @foreach (var fi in comparison.RandomForest.FeatureImportances.OrderByDescending(f => f.Importance))
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                Two complementary views of which of the six input features drive the binary classifier:
+                <strong>PFI</strong> (Permutation Feature Importance — model-agnostic accuracy drop when
+                each raw column is shuffled) and <strong>MDI</strong> (Mean Decrease in Impurity —
+                tree-internal split-gain accumulated across the ensemble, rolled up to the raw inputs).
+                PFI is the more reliable signal for downstream usefulness; MDI tends to over-credit
+                high-cardinality text features (Competencies, Interest TF-IDF tokens) because the tree
+                has more places to split.
+                @if (comparison.RandomForest.PositiveClassWeight != 1.0 || comparison.RandomForest.NegativeClassWeight != 1.0)
                 {
-                    <div class="d-flex align-center mb-3" style="gap:12px;">
-                        <MudText Typo="Typo.body2" Style="width:140px; text-align:right; font-weight:500; flex-shrink:0;">@fi.FeatureName</MudText>
-                        <MudProgressLinear Value="@fi.Importance" Rounded="true" Size="Size.Large" Color="Color.Primary"
-                                           Style="flex:1; height:28px;" />
-                        <MudText Typo="Typo.body2" Color="Color.Primary" Style="width:60px; font-weight:700; flex-shrink:0;">@fi.Importance.ToString("F2")%</MudText>
-                    </div>
+                    <span> Training used class-balance example weights: positive=@comparison.RandomForest.PositiveClassWeight.ToString("F3"), negative=@comparison.RandomForest.NegativeClassWeight.ToString("F3").</span>
                 }
-            }
-            else
-            {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Feature importance data not available.</MudText>
-            }
+            </MudText>
+
+            <MudGrid Spacing="4">
+                <MudItem xs="12" md="6">
+                    <MudPaper Elevation="1" Class="pa-3" Style="border-radius:8px;">
+                        <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:700;" Class="mb-2">
+                            PFI — Permutation (Mean Decrease in Accuracy)
+                        </MudText>
+                        @if (comparison.RandomForest.FeatureImportances?.Any() == true)
+                        {
+                            @foreach (var fi in comparison.RandomForest.FeatureImportances.OrderByDescending(f => f.Importance))
+                            {
+                                <div class="d-flex align-center mb-2" style="gap:10px;">
+                                    <MudText Typo="Typo.body2" Style="width:120px; text-align:right; font-weight:500; flex-shrink:0;">@fi.FeatureName</MudText>
+                                    <MudProgressLinear Value="@fi.Importance" Rounded="true" Size="Size.Medium" Color="Color.Primary"
+                                                       Style="flex:1; height:20px;" />
+                                    <MudText Typo="Typo.body2" Color="Color.Primary" Style="width:54px; font-weight:700; flex-shrink:0;">@fi.Importance.ToString("F1")%</MudText>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">PFI data not available.</MudText>
+                        }
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudPaper Elevation="1" Class="pa-3" Style="border-radius:8px;">
+                        <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:700;" Class="mb-2">
+                            MDI — Mean Decrease in Impurity (split-gain)
+                        </MudText>
+                        @if (comparison.RandomForest.FeatureImportancesMdi?.Any() == true)
+                        {
+                            @foreach (var fi in comparison.RandomForest.FeatureImportancesMdi.OrderByDescending(f => f.Importance))
+                            {
+                                <div class="d-flex align-center mb-2" style="gap:10px;">
+                                    <MudText Typo="Typo.body2" Style="width:120px; text-align:right; font-weight:500; flex-shrink:0;">@fi.FeatureName</MudText>
+                                    <MudProgressLinear Value="@fi.Importance" Rounded="true" Size="Size.Medium" Color="Color.Warning"
+                                                       Style="flex:1; height:20px;" />
+                                    <MudText Typo="Typo.body2" Color="Color.Primary" Style="width:54px; font-weight:700; flex-shrink:0;">@fi.Importance.ToString("F1")%</MudText>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">MDI not available (non-tree model).</MudText>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudExpansionPanels Elevation="0" Class="mt-4">
+                <MudExpansionPanel Text="What's the difference between PFI and MDI?">
+                    <MudText Typo="Typo.body2">
+                        <strong>PFI</strong> answers "if I shuffle this feature's values across rows,
+                        how much does test accuracy drop?" It is model-agnostic and reflects predictive
+                        usefulness on held-out data, but can underestimate features that the model has
+                        already learned to ignore.
+                        <br /><br />
+                        <strong>MDI</strong> answers "across all the trees, how much impurity reduction
+                        is credited to splits on this feature?" It is computed directly from the trained
+                        ensemble's internal structure (no held-out data needed) but is biased toward
+                        high-cardinality features that simply have more candidate split points — that
+                        is why Interest (RIASEC TF-IDF) and Competencies (skills TF-IDF) tend to look
+                        bigger under MDI than PFI here.
+                        <br /><br />
+                        When PFI and MDI agree on the top feature, that's a strong signal. Where they
+                        disagree (e.g. MDI elevating GWA while PFI shows ~0%), trust PFI — MDI is
+                        likely overcounting splits on a feature the model didn't actually need.
+                    </MudText>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
         </MudCardContent>
     </MudCard>
 

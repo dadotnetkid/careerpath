@@ -1,18 +1,18 @@
 {
   "RandomForest": {
     "AlgorithmName": "Random Forest (FastForest)",
-    "Accuracy": 0.76,
-    "Precision": 0.84,
-    "Recall": 0.7241379310344828,
-    "F1Score": 0.7777777777777777,
+    "Accuracy": 0.74,
+    "Precision": 0.8333333333333334,
+    "Recall": 0.6896551724137931,
+    "F1Score": 0.7547169811320755,
     "AreaUnderRocCurve": 0.8111658456486043,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:44:07.5716823Z",
+    "TrainedAt": "2026-05-14T01:38:24.90707Z",
     "ConfusionMatrix": [
       [
-        21,
-        8
+        20,
+        9
       ],
       [
         4,
@@ -26,19 +26,19 @@
     "FeatureImportances": [
       {
         "FeatureName": "CareerClarity",
-        "Importance": 44.83
+        "Importance": 46.46
       },
       {
         "FeatureName": "Interest",
-        "Importance": 36.55
+        "Importance": 37.8
       },
       {
         "FeatureName": "Competencies",
-        "Importance": 18.62
+        "Importance": 14.96
       },
       {
         "FeatureName": "YearGraduated",
-        "Importance": 0
+        "Importance": 0.79
       },
       {
         "FeatureName": "Gwa",
@@ -48,22 +48,50 @@
         "FeatureName": "Honors",
         "Importance": 0
       }
-    ]
+    ],
+    "FeatureImportancesMdi": [
+      {
+        "FeatureName": "Interest",
+        "Importance": 52.52
+      },
+      {
+        "FeatureName": "Competencies",
+        "Importance": 25.32
+      },
+      {
+        "FeatureName": "CareerClarity",
+        "Importance": 12.92
+      },
+      {
+        "FeatureName": "YearGraduated",
+        "Importance": 4.52
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 2.5
+      },
+      {
+        "FeatureName": "Honors",
+        "Importance": 2.23
+      }
+    ],
+    "PositiveClassWeight": 0.9709677696228027,
+    "NegativeClassWeight": 1.0308219194412231
   },
   "DecisionTree": {
     "AlgorithmName": "Decision Tree (FastTree)",
-    "Accuracy": 0.78,
-    "Precision": 0.8461538461538461,
-    "Recall": 0.7586206896551724,
-    "F1Score": 0.8,
-    "AreaUnderRocCurve": 0.80623973727422,
+    "Accuracy": 0.74,
+    "Precision": 0.8333333333333334,
+    "Recall": 0.6896551724137931,
+    "F1Score": 0.7547169811320755,
+    "AreaUnderRocCurve": 0.8152709359605911,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:44:08.3719558Z",
+    "TrainedAt": "2026-05-14T01:38:25.5769688Z",
     "ConfusionMatrix": [
       [
-        22,
-        7
+        20,
+        9
       ],
       [
         4,
@@ -77,19 +105,19 @@
     "FeatureImportances": [
       {
         "FeatureName": "Interest",
-        "Importance": 36.79
+        "Importance": 36.41
       },
       {
         "FeatureName": "CareerClarity",
-        "Importance": 33.16
+        "Importance": 32.52
       },
       {
         "FeatureName": "Competencies",
-        "Importance": 24.87
+        "Importance": 24.27
       },
       {
         "FeatureName": "YearGraduated",
-        "Importance": 5.18
+        "Importance": 6.8
       },
       {
         "FeatureName": "Gwa",
@@ -99,26 +127,54 @@
         "FeatureName": "Honors",
         "Importance": 0
       }
-    ]
+    ],
+    "FeatureImportancesMdi": [
+      {
+        "FeatureName": "Interest",
+        "Importance": 49.98
+      },
+      {
+        "FeatureName": "Competencies",
+        "Importance": 19.92
+      },
+      {
+        "FeatureName": "CareerClarity",
+        "Importance": 18.09
+      },
+      {
+        "FeatureName": "YearGraduated",
+        "Importance": 12.01
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 0
+      },
+      {
+        "FeatureName": "Honors",
+        "Importance": 0
+      }
+    ],
+    "PositiveClassWeight": 0.9709677696228027,
+    "NegativeClassWeight": 1.0308219194412231
   },
   "LogisticRegression": {
     "AlgorithmName": "Logistic Regression (LBFGS)",
     "Accuracy": 0.74,
-    "Precision": 0.75,
-    "Recall": 0.8275862068965517,
-    "F1Score": 0.7868852459016394,
+    "Precision": 0.7666666666666667,
+    "Recall": 0.7931034482758621,
+    "F1Score": 0.7796610169491527,
     "AreaUnderRocCurve": 0.7914614121510674,
     "TrainingRows": 251,
     "TestRows": 50,
-    "TrainedAt": "2026-05-08T10:44:08.9383832Z",
+    "TrainedAt": "2026-05-14T01:38:25.9812669Z",
     "ConfusionMatrix": [
       [
-        24,
-        5
+        23,
+        6
       ],
       [
-        8,
-        13
+        7,
+        14
       ]
     ],
     "ClassLabels": [
@@ -127,29 +183,32 @@
     ],
     "FeatureImportances": [
       {
-        "FeatureName": "CareerClarity",
-        "Importance": 43.24
+        "FeatureName": "Interest",
+        "Importance": 37.6
       },
       {
-        "FeatureName": "Interest",
-        "Importance": 42.34
+        "FeatureName": "CareerClarity",
+        "Importance": 36.8
       },
       {
         "FeatureName": "Competencies",
-        "Importance": 14.41
+        "Importance": 17.6
+      },
+      {
+        "FeatureName": "Gwa",
+        "Importance": 6.4
+      },
+      {
+        "FeatureName": "Honors",
+        "Importance": 1.6
       },
       {
         "FeatureName": "YearGraduated",
         "Importance": 0
-      },
-      {
-        "FeatureName": "Gwa",
-        "Importance": 0
-      },
-      {
-        "FeatureName": "Honors",
-        "Importance": 0
       }
-    ]
+    ],
+    "FeatureImportancesMdi": [],
+    "PositiveClassWeight": 0.9709677696228027,
+    "NegativeClassWeight": 1.0308219194412231
   }
 }

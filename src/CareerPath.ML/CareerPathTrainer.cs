@@ -1,8 +1,10 @@
 ﻿using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Calibrators;
+using Microsoft.ML.Trainers.FastTree;
 using CareerPath.Shared;
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 
 namespace CareerPath.ML;
@@ -11,16 +13,25 @@ public class CareerPathTrainer
 {
     private readonly MLContext _mlContext;
 
+    // Class-balance weights — recomputed in LoadData from the actual class frequencies
+    // of the dataset, then used by (a) the example weight column passed to each trainer
+    // and (b) surfaced into ModelMetrics so the manuscript can quote them.
+    // Static so CustomMapping lambdas (which must be field-stable for ML.NET serializer)
+    // can capture them without complaining.
+    private static float _positiveClassWeight = 1f;
+    private static float _negativeClassWeight = 1f;
+
     public CareerPathTrainer()
     {
         _mlContext = new MLContext(seed: 42);
     }
 
     /// <summary>
-    /// Loads alumni_gts3.csv and derives the binary `Label` from `CareerAlignment`
-    /// via CustomMapping (true if "Core ICT" or "ICT-Adjacent", false otherwise).
-    /// We do NOT trust the precomputed `CareerOutcome` column — re-deriving in code
-    /// keeps the rule tweakable without re-cleaning the CSV.
+    /// Loads alumni_gts3.csv, derives the binary `Label` from `CareerAlignment`
+    /// via CustomMapping (true if "Core ICT" or "ICT-Adjacent", false otherwise),
+    /// and attaches an `ExampleWeight` column for class balancing (inverse class
+    /// frequency: minority class rows get a higher weight so the trainer pays
+    /// equal attention to both outcomes).
     /// </summary>
     public IDataView LoadData(string csvPath)
     {
@@ -36,8 +47,37 @@ public class CareerPathTrainer
             },
             contractName: "CareerOutcomeMapping");
 
-        return labelMapping.Fit(rawData).Transform(rawData);
+        var labelled = labelMapping.Fit(rawData).Transform(rawData);
+
+        // Compute class frequencies once over the entire dataset and store on the
+        // static fields. The example-weight mapping below reads these — keeping the
+        // lambda free of captured state makes the saved pipeline portable.
+        var labels = labelled.GetColumn<bool>("Label").ToArray();
+        int positives = labels.Count(l => l);
+        int negatives = labels.Length - positives;
+        if (positives > 0 && negatives > 0)
+        {
+            _positiveClassWeight = (float)labels.Length / (2f * positives);
+            _negativeClassWeight = (float)labels.Length / (2f * negatives);
+        }
+        else
+        {
+            _positiveClassWeight = 1f;
+            _negativeClassWeight = 1f;
+        }
+        Console.WriteLine($"  Class balance weights: positive={_positiveClassWeight:F3} (n={positives}), " +
+                          $"negative={_negativeClassWeight:F3} (n={negatives})");
+
+        var weightMapping = _mlContext.Transforms.CustomMapping<LabelInputForWeight, WeightOutput>(
+            (input, output) => { output.ExampleWeight = input.Label ? _positiveClassWeight : _negativeClassWeight; },
+            contractName: "ClassBalanceWeights");
+
+        return weightMapping.Fit(labelled).Transform(labelled);
     }
+
+    /// <summary>Latest weights computed by <see cref="LoadData"/>. Static — read after a load.</summary>
+    public static (float positive, float negative) GetCurrentClassWeights()
+        => (_positiveClassWeight, _negativeClassWeight);
 
     public ModelComparison TrainAll(string csvPath, string modelOutputPath)
     {
@@ -56,10 +96,12 @@ public class CareerPathTrainer
         var featurePipeline = BuildFeaturePipeline();
 
         // ── Random Forest (FastForest + Platt calibrator for probability output) ──
+        // ExampleWeight is wired into FastForest so minority-class rows pull harder.
         Console.WriteLine("\n--- Training Random Forest (FastForest) ---");
         var rfTrainer = _mlContext.BinaryClassification.Trainers.FastForest(
             labelColumnName: "Label",
             featureColumnName: "Features",
+            exampleWeightColumnName: "ExampleWeight",
             numberOfTrees: 100,
             numberOfLeaves: 20,
             minimumExampleCountPerLeaf: 5);
@@ -68,6 +110,7 @@ public class CareerPathTrainer
         var rfModel = rfPipeline.Fit(trainData);
         var rfMetrics = EvaluateModel(rfModel, testData, trainCount, testCount, "Random Forest (FastForest)");
         ComputeFeatureImportance(rfModel, testData, rfMetrics);
+        ComputeMdiFeatureImportance(rfModel, trainData, rfMetrics);
 
         // Save the RF model (primary)
         Directory.CreateDirectory(Path.GetDirectoryName(modelOutputPath)!);
@@ -79,6 +122,7 @@ public class CareerPathTrainer
         var dtTrainer = _mlContext.BinaryClassification.Trainers.FastTree(
             labelColumnName: "Label",
             featureColumnName: "Features",
+            exampleWeightColumnName: "ExampleWeight",
             numberOfTrees: 1,
             numberOfLeaves: 20,
             minimumExampleCountPerLeaf: 5,
@@ -87,16 +131,26 @@ public class CareerPathTrainer
         var dtModel = dtPipeline.Fit(trainData);
         var dtMetrics = EvaluateModel(dtModel, testData, trainCount, testCount, "Decision Tree (FastTree)");
         ComputeFeatureImportance(dtModel, testData, dtMetrics);
+        ComputeMdiFeatureImportance(dtModel, trainData, dtMetrics);
 
         // ── Logistic Regression ──
         Console.WriteLine("\n--- Training Logistic Regression (LbfgsLogisticRegression) ---");
         var lrTrainer = _mlContext.BinaryClassification.Trainers.LbfgsLogisticRegression(
             labelColumnName: "Label",
-            featureColumnName: "Features");
+            featureColumnName: "Features",
+            exampleWeightColumnName: "ExampleWeight");
         var lrPipeline = featurePipeline.Append(lrTrainer);
         var lrModel = lrPipeline.Fit(trainData);
         var lrMetrics = EvaluateModel(lrModel, testData, trainCount, testCount, "Logistic Regression (LBFGS)");
         ComputeFeatureImportance(lrModel, testData, lrMetrics);
+        // LR has no tree structure — MDI is undefined; leave FeatureImportancesMdi empty.
+
+        var (wPos, wNeg) = GetCurrentClassWeights();
+        foreach (var m in new[] { rfMetrics, dtMetrics, lrMetrics })
+        {
+            m.PositiveClassWeight = wPos;
+            m.NegativeClassWeight = wNeg;
+        }
 
         var comparison = new ModelComparison
         {
@@ -272,6 +326,149 @@ public class CareerPathTrainer
     }
 
     /// <summary>
+    /// Mean Decrease in Impurity (MDI) feature importance for tree-based models.
+    /// The trained ensemble exposes per-slot split-gain via <c>GetFeatureWeights</c>;
+    /// we read the Features-column SlotNames metadata to map each encoded slot back
+    /// to its raw column name (YearGraduated, Gwa, Honors, CareerClarity,
+    /// Competencies, Interest), sum, and normalize to 100%.
+    ///
+    /// Skips silently if the model isn't a tree ensemble (LR), which is fine —
+    /// MDI is only defined for tree-based methods.
+    /// </summary>
+    private void ComputeMdiFeatureImportance(ITransformer model, IDataView trainData, ModelMetrics metrics)
+    {
+        try
+        {
+            var tree = FindTreeEnsembleParameters(model);
+            if (tree == null) return;
+
+            // Per-slot gain weights from the ensemble.
+            VBuffer<float> weights = default;
+            tree.GetFeatureWeights(ref weights);
+            var weightArray = weights.DenseValues().ToArray();
+            if (weightArray.Length == 0) return;
+
+            // Slot names for the Features column let us roll encoded slots back up
+            // to their raw input feature (e.g. "GwaEncoded.Outstanding" -> "Gwa").
+            var transformed = model.Transform(trainData);
+            var featuresCol = transformed.Schema.GetColumnOrNull("Features");
+            if (featuresCol == null) return;
+            VBuffer<ReadOnlyMemory<char>> slotNamesBuffer = default;
+            featuresCol.Value.GetSlotNames(ref slotNamesBuffer);
+            var slotNames = slotNamesBuffer.DenseValues().Select(c => c.ToString()).ToArray();
+
+            // Slot count and weight count can differ if Normalize collapsed something;
+            // in practice ML.NET keeps them aligned, but guard anyway.
+            int n = Math.Min(slotNames.Length, weightArray.Length);
+
+            // Map each slot's name prefix to a raw input bucket. Names look like
+            // "GwaEncoded.Outstanding", "CompetenciesFeaturized.programming", or
+            // just "YearGraduated" for the lone numeric column.
+            var prefixToRaw = new (string Prefix, string Raw)[]
+            {
+                ("YearGraduated",           "YearGraduated"),
+                ("GwaEncoded",              "Gwa"),
+                ("HonorsEncoded",           "Honors"),
+                ("CareerClarityEncoded",    "CareerClarity"),
+                ("CompetenciesFeaturized",  "Competencies"),
+                ("InterestFeaturized",      "Interest"),
+            };
+
+            var sumPerRaw = prefixToRaw.ToDictionary(p => p.Raw, _ => 0.0);
+            for (int i = 0; i < n; i++)
+            {
+                var slot = slotNames[i];
+                foreach (var (prefix, raw) in prefixToRaw)
+                {
+                    if (slot.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        sumPerRaw[raw] += weightArray[i];
+                        break;
+                    }
+                }
+            }
+
+            var total = sumPerRaw.Values.Sum();
+            if (total <= 0) return;
+
+            metrics.FeatureImportancesMdi = sumPerRaw
+                .OrderByDescending(kv => kv.Value)
+                .Select(kv => new FeatureImportance
+                {
+                    FeatureName = kv.Key,
+                    Importance = Math.Round(kv.Value / total * 100, 2)
+                })
+                .ToList();
+
+            Console.WriteLine("  MDI Feature Importance:");
+            foreach (var fi in metrics.FeatureImportancesMdi)
+                Console.WriteLine($"    {fi.FeatureName}: {fi.Importance:F2}%");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  MDI feature importance computation skipped: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Walks the transformer chain looking for a tree-ensemble parameter object.
+    /// Handles both calibrated (RF + Platt) and uncalibrated (FastTree) wrappers,
+    /// since the calibrator nests the tree params under a "SubModel" property.
+    /// Uses reflection because the public concrete types differ across trainer
+    /// flavors and aren't always exposed via a clean interface.
+    /// </summary>
+    private static TreeEnsembleModelParameters? FindTreeEnsembleParameters(ITransformer model)
+    {
+        // Recurse into chains.
+        if (model is IEnumerable<ITransformer> chain)
+        {
+            foreach (var inner in chain)
+            {
+                var found = FindTreeEnsembleParameters(inner);
+                if (found != null) return found;
+            }
+        }
+
+        var modelProp = FindPropertyByName(model.GetType(), "Model");
+        if (modelProp == null) return null;
+        var modelObj = modelProp.GetValue(model);
+        if (modelObj == null) return null;
+
+        if (modelObj is TreeEnsembleModelParameters tree) return tree;
+
+        // Calibrated wrapper: walk the SubModel chain (CalibratedModelParametersBase has SubModel).
+        var visited = new HashSet<object>();
+        var current = modelObj;
+        while (current != null && visited.Add(current))
+        {
+            if (current is TreeEnsembleModelParameters t) return t;
+            var subModelProp = FindPropertyByName(current.GetType(), "SubModel");
+            if (subModelProp == null) break;
+            current = subModelProp.GetValue(current);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Walks the inheritance chain looking for a public instance property by name.
+    /// We avoid <c>Type.GetProperty(name)</c> because <c>CalibratedModelParametersBase</c>
+    /// hides a base property with <c>new</c>, which causes the runtime to throw
+    /// <c>AmbiguousMatchException</c>. Returning the most-derived declaration first
+    /// (i.e. the typed override) gives us the concrete runtime instance.
+    /// </summary>
+    private static PropertyInfo? FindPropertyByName(Type? type, string name)
+    {
+        while (type != null)
+        {
+            var p = type.GetProperty(name,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            if (p != null) return p;
+            type = type.BaseType;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Runs 10-fold and 20-fold cross-validation for RF, DT, and LR (same hyperparameters
     /// as <see cref="TrainAll"/>). Returns a <see cref="CrossValidationReport"/> with six
     /// <see cref="CvAlgorithmRun"/>s — one per (algorithm × foldCount) combo. Per-fold metrics
@@ -291,13 +488,15 @@ public class CareerPathTrainer
             ("Decision Tree", _mlContext.BinaryClassification.Trainers.FastTree(
                 labelColumnName: "Label",
                 featureColumnName: "Features",
+                exampleWeightColumnName: "ExampleWeight",
                 numberOfTrees: 1,
                 numberOfLeaves: 20,
                 minimumExampleCountPerLeaf: 5,
                 learningRate: 1.0)),
             ("Logistic Regression", _mlContext.BinaryClassification.Trainers.LbfgsLogisticRegression(
                 labelColumnName: "Label",
-                featureColumnName: "Features"))
+                featureColumnName: "Features",
+                exampleWeightColumnName: "ExampleWeight"))
         };
 
         var foldCounts = new[] { 10, 20 };
@@ -622,6 +821,7 @@ public class CareerPathTrainer
         var rfTrainer = _mlContext.BinaryClassification.Trainers.FastForest(
             labelColumnName: "Label",
             featureColumnName: "Features",
+            exampleWeightColumnName: "ExampleWeight",
             numberOfTrees: 100,
             numberOfLeaves: 20,
             minimumExampleCountPerLeaf: 5);
@@ -650,4 +850,16 @@ public class CareerPathTrainer
 public class LabelOutput
 {
     public bool Label { get; set; }
+}
+
+// Tiny intermediate row shapes for the class-balance CustomMapping. The mapping
+// reads only Label and writes only ExampleWeight; ML.NET copies the rest through.
+public class LabelInputForWeight
+{
+    public bool Label { get; set; }
+}
+
+public class WeightOutput
+{
+    public float ExampleWeight { get; set; }
 }

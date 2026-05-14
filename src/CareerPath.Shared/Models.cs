@@ -65,7 +65,29 @@ public class ModelMetrics
     public DateTime TrainedAt { get; set; }
     public int[][] ConfusionMatrix { get; set; } = Array.Empty<int[]>();
     public List<string> ClassLabels { get; set; } = new() { "ICT-Aligned", "Non-ICT-Aligned" };
+
+    /// <summary>
+    /// Permutation Feature Importance — measured by permuting each raw input
+    /// column and observing the accuracy drop. Model-agnostic; populated for
+    /// RF, DT, and LR. Values are percent contributions (sum to 100).
+    /// </summary>
     public List<FeatureImportance> FeatureImportances { get; set; } = new();
+
+    /// <summary>
+    /// Mean Decrease in Impurity (MDI) — tree-internal split-gain importance
+    /// aggregated from the trained ensemble's per-slot weights up to the six
+    /// raw input columns. Populated for tree models (RF, DT) only; LR remains
+    /// empty. Values are percent contributions (sum to 100).
+    /// </summary>
+    public List<FeatureImportance> FeatureImportancesMdi { get; set; } = new();
+
+    /// <summary>
+    /// Per-class example weight used during training, derived from inverse
+    /// class frequency. Both equal to 1.0 disables class balancing. Surfaced
+    /// in metrics.json so the manuscript can quote the exact weights used.
+    /// </summary>
+    public double PositiveClassWeight { get; set; } = 1.0;
+    public double NegativeClassWeight { get; set; } = 1.0;
 }
 
 public class FeatureImportance
