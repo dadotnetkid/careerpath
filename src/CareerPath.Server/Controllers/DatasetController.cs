@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace CareerPath.Server.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = AuthRoles.Admin)]
 public class DatasetController : ControllerBase
 {
     private readonly DatasetService _datasetService;

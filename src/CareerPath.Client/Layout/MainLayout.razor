@@ -21,7 +21,7 @@
             NVSU CITE
         </MudChip>
 
-        @* Auth control: Sign-In button when anonymous, account menu when signed in. *@
+        @* Auth control: Sign-In + Sign-Up buttons when anonymous, account menu when signed in. *@
         @if (Auth.IsAuthenticated)
         {
             <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-2">
@@ -32,11 +32,24 @@
                                EndIcon="@Icons.Material.Filled.ArrowDropDown"
                                Style="color:#fff; text-transform:none;">
                         <span style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                            @Auth.Email
+                            @Auth.DisplayName
+                            @if (!string.IsNullOrEmpty(Auth.Role))
+                            {
+                                <MudChip T="string" Size="Size.Small"
+                                         Style="background:rgba(255,255,255,0.15); color:#FFD701; font-weight:600; margin-left:8px;">
+                                    @Auth.Role
+                                </MudChip>
+                            }
                         </span>
                     </MudButton>
                 </ActivatorContent>
                 <ChildContent>
+                    @if (Auth.IsStudent)
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.BookmarkBorder" Href="my-results">
+                            My Saved Results
+                        </MudMenuItem>
+                    }
                     <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="HandleLogout">
                         Sign Out
                     </MudMenuItem>
@@ -45,12 +58,19 @@
         }
         else
         {
+            <MudButton StartIcon="@Icons.Material.Filled.PersonAdd"
+                       Color="Color.Inherit"
+                       Variant="Variant.Text"
+                       OnClick="OpenRegister"
+                       Style="color:#fff; text-transform:none;"
+                       Class="ml-2">
+                Sign Up
+            </MudButton>
             <MudButton StartIcon="@Icons.Material.Filled.Login"
                        Color="Color.Inherit"
                        Variant="Variant.Text"
                        OnClick="OpenLogin"
-                       Style="color:#fff; text-transform:none;"
-                       Class="ml-2">
+                       Style="color:#fff; text-transform:none;">
                 Sign In
             </MudButton>
         }
@@ -98,7 +118,19 @@
             FullWidth = true,
             NoHeader = true
         };
-        await DialogService.ShowAsync<Components.LoginDialog>("Admin Sign In", options);
+        await DialogService.ShowAsync<Components.LoginDialog>("Sign In", options);
+    }
+
+    private async Task OpenRegister()
+    {
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            NoHeader = true
+        };
+        await DialogService.ShowAsync<Components.RegisterDialog>("Student Sign Up", options);
     }
 
     private async Task HandleLogout()

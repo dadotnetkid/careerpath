@@ -1,7 +1,39 @@
+@inject CareerPath.Client.Services.AuthService Auth
+@implements IDisposable
+
 <MudNavMenu>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
-    <MudNavLink Href="riasec" Icon="@Icons.Material.Filled.Quiz">RIASEC Assessment</MudNavLink>
-    <MudNavLink Href="dataset" Icon="@Icons.Material.Filled.TableChart">Dataset</MudNavLink>
-    <MudNavLink Href="insights" Icon="@Icons.Material.Filled.Insights">Insights</MudNavLink>
+    <MudNavLink Href="riasec" Icon="@Icons.Material.Filled.Quiz">Career Path Assessment</MudNavLink>
+
+    @* Admin-only researcher workflow: Dataset -> Train & Test -> Insights *@
+    @if (Auth.IsAdmin)
+    {
+        <MudDivider Class="my-1" />
+        <MudNavLink Href="dataset" Icon="@Icons.Material.Filled.TableChart">Dataset</MudNavLink>
+        <MudNavLink Href="train-test" Icon="@Icons.Material.Filled.Science">Train &amp; Test</MudNavLink>
+        <MudNavLink Href="insights" Icon="@Icons.Material.Filled.Insights">Insights</MudNavLink>
+        <MudDivider Class="my-1" />
+    }
+
+    @* Student-only: their saved results from the wizard *@
+    @if (Auth.IsStudent)
+    {
+        <MudNavLink Href="my-results" Icon="@Icons.Material.Filled.BookmarkBorder">My Saved Results</MudNavLink>
+    }
+
     <MudNavLink Href="about" Icon="@Icons.Material.Filled.Info">About</MudNavLink>
 </MudNavMenu>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Auth.AuthStateChanged += OnAuthChanged;
+    }
+
+    public void Dispose()
+    {
+        Auth.AuthStateChanged -= OnAuthChanged;
+    }
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+}

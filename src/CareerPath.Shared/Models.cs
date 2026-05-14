@@ -259,10 +259,18 @@ public class ModelStatus
 
 // ── Auth ──
 //
-// Cookie-based admin auth. The Identity store lives in the same SQLite DB
-// as PredictionLog / TrainingRun. Only one admin user is seeded on first
-// startup (email/password from appsettings.Production.json). No
-// registration endpoint — admin-only by design (thesis demo).
+// Cookie-based auth. Two roles: "Admin" (researcher — full access to
+// Dataset / Train & Test / Insights) and "Student" (CITE student — completes
+// the career-path wizard, can save their own results). Both kinds of user
+// live in AspNetUsers; the role lives in AspNetUserRoles. Admin is seeded
+// from configuration on first startup; students self-register via POST
+// /api/auth/register.
+
+public static class AuthRoles
+{
+    public const string Admin = "Admin";
+    public const string Student = "Student";
+}
 
 public class LoginRequest
 {
@@ -276,10 +284,28 @@ public class LoginRequest
     public bool RememberMe { get; set; } = false;
 }
 
+public class RegisterRequest
+{
+    [Required, EmailAddress]
+    public string Email { get; set; } = "";
+
+    [Required, MinLength(8)]
+    public string Password { get; set; } = "";
+
+    /// <summary>Display name (optional). Used in the top bar; falls back to email.</summary>
+    public string FullName { get; set; } = "";
+}
+
 public class AuthStatusDto
 {
     public bool IsAuthenticated { get; set; }
     public string Email { get; set; } = "";
+
+    /// <summary>"Admin" or "Student" when authenticated; empty when anonymous.</summary>
+    public string Role { get; set; } = "";
+
+    /// <summary>Display name when set on the user record; falls back to email on the client.</summary>
+    public string FullName { get; set; } = "";
 }
 
 // ── RIASEC + Career Clarity Workflow ──

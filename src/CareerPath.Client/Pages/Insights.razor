@@ -5,13 +5,13 @@
 
 <PageTitle>Model Insights</PageTitle>
 
-@if (!Auth.IsAuthenticated)
+@if (!Auth.IsAdmin)
 {
     <MudPaper Class="pa-6 mt-6 mx-auto" Elevation="0" Style="max-width:720px; text-align:center; border:1px solid #e0e0e0; border-radius:12px;">
         <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Size="Size.Large" />
         <MudText Typo="Typo.h5" Class="mt-2 mb-2" Style="font-family:'Source Serif 4',serif;">Researcher Sign-in Required</MudText>
         <MudText Typo="Typo.body1" Color="Color.Secondary">
-            This page contains researcher-facing analytics. Please sign in via the button in the upper right.
+            This page contains researcher-facing analytics. Please sign in as an administrator via the button in the upper right.
         </MudText>
     </MudPaper>
 }

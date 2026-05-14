@@ -1,4 +1,6 @@
 @page "/"
+@inject CareerPath.Client.Services.AuthService Auth
+@implements IDisposable
 
 <PageTitle>Career Path Recommendation System</PageTitle>
 
@@ -18,10 +20,26 @@
         For graduating students of the College of Information Technology Education (CITE).
         Powered by machine learning trained on 301 CITE alumni records.
     </MudText>
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <div class="d-flex flex-wrap gap-2 mt-4">
+            <MudButton Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       Style="background:#FFD701; color:#005a2a; font-weight:700;"
+                       Href="riasec">
+                Start Assessment
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.85);" Class="ms-1 mt-3">
+                CITE students can sign up to save results — guests are welcome to try without an account.
+            </MudText>
+        </div>
+    }
 </MudPaper>
 
 <MudGrid Spacing="4" Class="mb-6">
-    <MudItem xs="12" md="4">
+    @* Always visible: the assessment is the primary student-facing flow (and works for guests). *@
+    <MudItem xs="12" md="@(Auth.IsAdmin ? 4 : 12)">
         <MudCard Elevation="3" Style="height:100%; cursor:pointer;" @onclick='() => Nav.NavigateTo("riasec")'>
             <MudCardContent Class="text-center pa-6">
                 <MudIcon Icon="@Icons.Material.Filled.Quiz" Color="Color.Primary" Style="font-size:3rem;" />
@@ -32,29 +50,54 @@
             </MudCardContent>
         </MudCard>
     </MudItem>
-    <MudItem xs="12" md="4">
-        <MudCard Elevation="3" Style="height:100%; cursor:pointer;" @onclick='() => Nav.NavigateTo("dataset")'>
-            <MudCardContent Class="text-center pa-6">
-                <MudIcon Icon="@Icons.Material.Filled.TableChart" Color="Color.Primary" Style="font-size:3rem;" />
-                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">Browse Dataset</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                    Explore the 301 alumni records from the CHED Graduate Tracer Study used to train the model.
-                </MudText>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="12" md="4">
-        <MudCard Elevation="3" Style="height:100%; cursor:pointer;" @onclick='() => Nav.NavigateTo("insights")'>
-            <MudCardContent Class="text-center pa-6">
-                <MudIcon Icon="@Icons.Material.Filled.Insights" Color="Color.Primary" Style="font-size:3rem;" />
-                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">Model Insights</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
-                    View model performance metrics, algorithm comparisons, and feature importance analysis.
-                </MudText>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
+
+    @* Admin-only: researcher workflow Dataset -> Train & Test -> Insights. *@
+    @if (Auth.IsAdmin)
+    {
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3" Style="height:100%; cursor:pointer;" @onclick='() => Nav.NavigateTo("dataset")'>
+                <MudCardContent Class="text-center pa-6">
+                    <MudIcon Icon="@Icons.Material.Filled.TableChart" Color="Color.Primary" Style="font-size:3rem;" />
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">Browse Dataset</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                        Explore the 301 alumni records from the CHED Graduate Tracer Study used to train the model.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3" Style="height:100%; cursor:pointer;" @onclick='() => Nav.NavigateTo("insights")'>
+                <MudCardContent Class="text-center pa-6">
+                    <MudIcon Icon="@Icons.Material.Filled.Insights" Color="Color.Primary" Style="font-size:3rem;" />
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">Model Insights</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                        View model performance metrics, algorithm comparisons, and feature importance analysis.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    }
 </MudGrid>
+
+@if (Auth.IsAdmin)
+{
+    <MudPaper Class="pa-4 mb-6" Elevation="1" Style="border-left:6px solid #007F3B; border-radius:6px;">
+        <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:700;">
+            Researcher workflow
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Dataset → Train &amp; Test → Insights. Open the side drawer for the admin links, or jump directly:
+        </MudText>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.TableChart" Href="dataset">1 — Dataset</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Science" Href="train-test">2 — Train &amp; Test</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Insights" Href="insights">3 — Insights</MudButton>
+        </div>
+    </MudPaper>
+}
 
 <MudCard Elevation="2" Class="mb-6">
     <MudCardHeader>
@@ -91,4 +134,16 @@
 
 @code {
     [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Auth.AuthStateChanged += OnAuthChanged;
+    }
+
+    public void Dispose()
+    {
+        Auth.AuthStateChanged -= OnAuthChanged;
+    }
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
 }

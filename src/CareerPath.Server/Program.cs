@@ -86,6 +86,7 @@ builder.Services.AddIdentityCore<IdentityUser>(options =>
     options.Password.RequireLowercase = false; // single-admin thesis demo; admin chose the seed password
     options.User.RequireUniqueEmail = true;
 })
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
@@ -121,6 +122,17 @@ builder.Services.AddSingleton(new RiasecService(openAiService, datasetService));
 // holds no state and uses the AppDbContext passed into each call.
 builder.Services.AddSingleton<TrainingHistoryService>();
 
+// Admin-only background trainer used by the Train & Test page. Captures all
+// resolved paths so the worker thread doesn't need IConfiguration at runtime.
+builder.Services.AddSingleton<ModelTrainingService>(sp => new ModelTrainingService(
+    csvPath: csvPath,
+    modelDir: Path.GetDirectoryName(modelPath)!,
+    modelPath: modelPath,
+    cvMetricsPath: cvMetricsPath,
+    diagnosticMetricsPath: diagnosticMetricsPath,
+    services: sp,
+    logger: sp.GetRequiredService<ILogger<ModelTrainingService>>()));
+
 var app = builder.Build();
 
 // Ensure DB is created. If the AppPool identity lacks write permission, log and
@@ -149,11 +161,21 @@ try
         Console.WriteLine("Identity tables present.");
     }
 
-    // Seed the single admin user from configuration. Idempotent: if the user
-    // already exists we leave the password alone (so a future password
-    // rotation isn't reverted by a redeploy). See AGENT_CONTRACT_SPEC_V4.md §3.
+    // Seed roles ("Admin", "Student") then the admin user. Both are idempotent
+    // so re-runs on each boot are safe. The admin user's password is NOT
+    // overwritten if the user already exists — protects manual rotations.
     try
     {
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        foreach (var roleName in new[] { CareerPath.Shared.AuthRoles.Admin, CareerPath.Shared.AuthRoles.Student })
+        {
+            if (!roleManager.RoleExistsAsync(roleName).GetAwaiter().GetResult())
+            {
+                var rr = roleManager.CreateAsync(new IdentityRole(roleName)).GetAwaiter().GetResult();
+                Console.WriteLine($"Role seeded: {roleName} (succeeded={rr.Succeeded})");
+            }
+        }
+
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
         var adminEmail = builder.Configuration["Auth:AdminEmail"] ?? "";
         var adminPassword = builder.Configuration["Auth:AdminPassword"] ?? "";
@@ -165,13 +187,27 @@ try
                 var user = new IdentityUser { UserName = adminEmail, Email = adminEmail, EmailConfirmed = true };
                 var result = userManager.CreateAsync(user, adminPassword).GetAwaiter().GetResult();
                 if (result.Succeeded)
+                {
+                    userManager.AddToRoleAsync(user, CareerPath.Shared.AuthRoles.Admin).GetAwaiter().GetResult();
                     Console.WriteLine($"Admin user seeded: {adminEmail}");
+                }
                 else
                     Console.Error.WriteLine($"Admin user seed failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
             }
             else
             {
-                Console.WriteLine($"Admin user already exists, skipping seed: {adminEmail}");
+                // Make sure the seeded admin always has the Admin role — covers
+                // upgrades from the pre-roles V4 schema where the user existed
+                // without any role assignment.
+                if (!userManager.IsInRoleAsync(existing, CareerPath.Shared.AuthRoles.Admin).GetAwaiter().GetResult())
+                {
+                    userManager.AddToRoleAsync(existing, CareerPath.Shared.AuthRoles.Admin).GetAwaiter().GetResult();
+                    Console.WriteLine($"Admin role retro-added to existing user: {adminEmail}");
+                }
+                else
+                {
+                    Console.WriteLine($"Admin user already exists with role, skipping seed: {adminEmail}");
+                }
             }
         }
         else
@@ -181,7 +217,7 @@ try
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"Admin seed failed: {ex.Message}");
+        Console.Error.WriteLine($"Role/admin seed failed: {ex.Message}");
     }
 
     // Best-effort ingest of any cv_metrics.json the trainer has written. The

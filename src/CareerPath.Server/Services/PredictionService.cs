@@ -6,16 +6,27 @@ namespace CareerPath.Server.Services;
 
 public class PredictionService
 {
-    private readonly PredictionEngine<StudentFeatures, CareerOutcomePrediction>? _engine;
+    private PredictionEngine<StudentFeatures, CareerOutcomePrediction>? _engine;
     private readonly object _lock = new();
     public bool IsReady => _engine != null;
 
     public PredictionService(string modelPath)
     {
-        if (File.Exists(modelPath))
+        Reload(modelPath);
+    }
+
+    /// <summary>
+    /// Swap in a freshly-trained model without restarting the host. Called by
+    /// <c>ModelTrainingService</c> after a successful retrain.
+    /// </summary>
+    public void Reload(string modelPath)
+    {
+        if (!File.Exists(modelPath)) return;
+        var trainer = new CareerPathTrainer();
+        var fresh = trainer.LoadPredictionEngine(modelPath);
+        lock (_lock)
         {
-            var trainer = new CareerPathTrainer();
-            _engine = trainer.LoadPredictionEngine(modelPath);
+            _engine = fresh;
         }
     }
 
