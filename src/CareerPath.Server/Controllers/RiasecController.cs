@@ -94,7 +94,13 @@ public class RiasecController : ControllerBase
                     Interest = dominantCode
                 };
                 var prediction = _predictionService.Predict(studentInput);
-                prediction.SimilarAlumniJobs = _datasetService.FindSimilarAlumniJobs(studentInput, prediction.PredictedOutcome);
+                // "Alumni with similar profiles became" is a top-5 slice of the SAME
+                // matched-jobs list shown in the Top Matched Job Roles table — one
+                // source of truth, no contradiction between the two views.
+                prediction.SimilarAlumniJobs = matchedJobs
+                    .Take(5)
+                    .Select(j => j.JobTitle)
+                    .ToList();
                 result.Prediction = prediction;
             }
             catch
