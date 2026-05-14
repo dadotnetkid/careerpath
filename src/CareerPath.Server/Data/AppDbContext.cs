@@ -11,6 +11,7 @@ public class AppDbContext : IdentityDbContext<IdentityUser>
     public DbSet<PredictionLog> PredictionLogs => Set<PredictionLog>();
     public DbSet<TrainingRun> TrainingRuns => Set<TrainingRun>();
     public DbSet<TrainingFold> TrainingFolds => Set<TrainingFold>();
+    public DbSet<SavedAssessmentResult> SavedResults => Set<SavedAssessmentResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,6 +22,9 @@ public class AppDbContext : IdentityDbContext<IdentityUser>
             .WithMany(r => r.Folds)
             .HasForeignKey(f => f.TrainingRunId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SavedAssessmentResult>()
+            .HasIndex(s => new { s.UserId, s.CreatedAt });
     }
 }
 
@@ -77,4 +81,29 @@ public class TrainingFold
     public double Recall { get; set; }
     public double F1 { get; set; }
     public double Auc { get; set; }
+}
+
+// Student-saved wizard result. One row per click of the "Save Result" button
+// on the Results step. Scoped by UserId — students only see their own rows.
+// AiAnalysis can be long (multiple paragraphs from GPT-4o-mini) so we let SQL
+// Server pick NVARCHAR(MAX) by default for the string columns.
+public class SavedAssessmentResult
+{
+    public int Id { get; set; }
+    public string UserId { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
+    public string Competencies { get; set; } = "";
+
+    public string DominantCode { get; set; } = "";
+    public string ClarityLabel { get; set; } = "";
+    public string ClarityBucket { get; set; } = "";
+    public double ClarityTotal { get; set; }
+
+    public string PredictedOutcome { get; set; } = "";
+    public float PredictedConfidence { get; set; }
+    public string AiAnalysis { get; set; } = "";
+    public string Notes { get; set; } = "";
 }

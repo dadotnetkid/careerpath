@@ -1,5 +1,9 @@
-﻿@page "/riasec"
+@page "/riasec"
 @inject HttpClient Http
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject CareerPath.Client.Services.AuthService Auth
+@implements IDisposable
 
 <PageTitle>Career Path Assessment</PageTitle>
 
@@ -15,7 +19,20 @@
 }
 else if (finalResult != null)
 {
-    @* ══════════ FINAL REPORT ══════════ *@
+    @* ══════════ STEP 6: RESULTS ══════════ *@
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
+        <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            @foreach (var (label, idx) in stepLabels.Select((l, i) => (l, i)))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="mr-1" />
+                    @label
+                </MudChip>
+            }
+        </div>
+    </MudPaper>
+
     <MudPaper Class="pa-6 mb-4" Style="background: linear-gradient(135deg, #007F3B 0%, #005a2a 100%); border-radius:12px;">
         <MudText Typo="Typo.h4" Style="color:#fff; font-family:'Source Serif 4',serif; font-weight:700;" Class="mb-2">
             Your Career Path Report
@@ -27,6 +44,135 @@ else if (finalResult != null)
             Career Clarity: @finalResult.Clarity.TotalScore/25 — @finalResult.Clarity.ClarityLabel
         </MudText>
     </MudPaper>
+
+    @* ══════════ Prediction lead — answer the headline question first ══════════ *@
+    @if (finalResult.Prediction != null)
+    {
+        <MudCard Elevation="3" Class="mb-4" Style="border:2px solid #FFD700;">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.Psychology" Class="mr-2" Style="vertical-align:middle;" />
+                        Predicted Career Outcome
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-6">
+                <div class="d-flex flex-wrap align-center gap-3 mb-4">
+                    <MudChip T="string" Size="Size.Large"
+                             Color="@(finalResult.Prediction.PredictedOutcome == "ICT-Aligned" ? Color.Primary : Color.Info)"
+                             Variant="Variant.Filled"
+                             Style="font-size:1.1rem; font-weight:700; padding:8px 20px;">
+                        @finalResult.Prediction.PredictedOutcome
+                    </MudChip>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                 Style="text-transform:uppercase; letter-spacing:1px;">Confidence</MudText>
+                        <MudText Typo="Typo.h3" Color="Color.Primary"
+                                 Style="font-family:'Source Serif 4',serif; font-weight:700; line-height:1;">
+                            @((finalResult.Prediction.Confidence * 100).ToString("F0"))%
+                        </MudText>
+                    </div>
+                </div>
+
+                <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mb-2"
+                         Style="font-weight:700;">Class Probabilities</MudText>
+                @foreach (var s in finalResult.Prediction.Scores)
+                {
+                    <div class="d-flex align-center mb-3" style="gap:12px;">
+                        <MudText Typo="Typo.body2" Style="width:160px; font-weight:500; flex-shrink:0;">@s.Label</MudText>
+                        <MudProgressLinear Value="@(s.Probability * 100)" Rounded="true" Size="Size.Large"
+                                           Color="@(s.Label == "ICT-Aligned" ? Color.Primary : Color.Info)"
+                                           Style="flex:1; height:24px;" />
+                        <MudText Typo="Typo.body2" Style="width:60px; font-weight:700; flex-shrink:0;">
+                            @((s.Probability * 100).ToString("F1"))%
+                        </MudText>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(finalResult.Prediction.Interpretation))
+                {
+                    <MudPaper Class="pa-4 mt-4" Elevation="0"
+                              Style="background:#f8f9fa; border-left:4px solid #007F3B; border-radius:6px;">
+                        <MudText Typo="Typo.body1" Style="line-height:1.7;">
+                            @finalResult.Prediction.Interpretation
+                        </MudText>
+                    </MudPaper>
+                }
+
+                @if (finalResult.Prediction.SimilarAlumniJobs?.Any() == true)
+                {
+                    <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mt-4 mb-2"
+                             Style="font-weight:700;">
+                        Alumni with similar profiles became:
+                    </MudText>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var job in finalResult.Prediction.SimilarAlumniJobs)
+                        {
+                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium">
+                                @job
+                            </MudChip>
+                        }
+                    </div>
+                }
+            </MudCardContent>
+        </MudCard>
+    }
+
+    @* ══════════ Save Result — students only ══════════ *@
+    <MudCard Elevation="2" Class="mb-4">
+        <MudCardContent Class="pa-4">
+            <div class="d-flex flex-wrap align-center gap-3">
+                @if (Auth.IsStudent)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@(saveSucceeded ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Save)"
+                               Disabled="@(saveSucceeded || isSaving)" OnClick="SaveResult">
+                        @if (isSaving)
+                        {
+                            <MudProgressCircular Color="Color.Inherit" Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Saving…</span>
+                        }
+                        else if (saveSucceeded)
+                        {
+                            <span>Saved</span>
+                        }
+                        else
+                        {
+                            <span>Save This Result</span>
+                        }
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.BookmarkBorder" Href="my-results">
+                        View My Saved Results
+                    </MudButton>
+                    @if (!string.IsNullOrEmpty(saveError))
+                    {
+                        <MudText Color="Color.Error" Typo="Typo.body2">@saveError</MudText>
+                    }
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.BookmarkBorder" Color="Color.Primary" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @if (Auth.IsAdmin)
+                        {
+                            <span>Saved results are a student-only feature. Admins can browse aggregated data on the Dataset page.</span>
+                        }
+                        else
+                        {
+                            <span><strong>Want to save this result?</strong> Sign up as a CITE student to keep your assessment history.</span>
+                        }
+                    </MudText>
+                    @if (!Auth.IsAuthenticated)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                                   OnClick="OpenRegisterFromResults">Sign Up</MudButton>
+                    }
+                }
+            </div>
+        </MudCardContent>
+    </MudCard>
 
     <MudGrid Spacing="4" Class="mb-4">
         @* RIASEC Score Bars *@
@@ -139,7 +285,7 @@ else if (finalResult != null)
         </MudCardContent>
     </MudCard>
 
-    @* AI Analysis *@
+    @* AI Analysis — now seeded with the prediction so it agrees ══════════ *@
     <MudCard Elevation="3" Class="mb-4">
         <MudCardHeader Style="background:#007F3B; color:#fff;">
             <CardHeaderContent>
@@ -156,152 +302,6 @@ else if (finalResult != null)
         </MudCardContent>
     </MudCard>
 
-    @* ══════════ PREDICT MY CAREER OUTCOME ══════════ *@
-    <MudCard Elevation="3" Class="mb-4" Style="border:2px solid #FFD700;">
-        <MudCardHeader Style="background:#007F3B; color:#fff;">
-            <CardHeaderContent>
-                <MudText Typo="Typo.h6">
-                    <MudIcon Icon="@Icons.Material.Filled.Psychology" Class="mr-2" Style="vertical-align:middle;" />
-                    Predict My Career Outcome
-                </MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent Class="pa-6">
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                Combine your RIASEC interest (<strong>@finalResult.DominantCode</strong>) and Career Clarity
-                (<strong>@(string.IsNullOrEmpty(finalResult.Clarity.ClarityBucket) ? finalResult.Clarity.ClarityLabel : finalResult.Clarity.ClarityBucket)</strong>)
-                with your academic profile to get a Random Forest prediction of whether your likely career
-                outcome will be ICT-Aligned or Non-ICT-Aligned.
-            </MudText>
-
-            <MudGrid Spacing="3">
-                <MudItem xs="12" md="6">
-                    <MudSelect T="string" @bind-Value="predictGwa" Label="GWA" Variant="Variant.Outlined"
-                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Grade">
-                        <MudSelectItem Value="@("Outstanding")">Outstanding</MudSelectItem>
-                        <MudSelectItem Value="@("Very Satisfactory")">Very Satisfactory</MudSelectItem>
-                        <MudSelectItem Value="@("Satisfactory")">Satisfactory</MudSelectItem>
-                        <MudSelectItem Value="@("Fair")">Fair</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudSelect T="string" @bind-Value="predictHonors" Label="Honors" Variant="Variant.Outlined"
-                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.MilitaryTech">
-                        <MudSelectItem Value="@("No Honors")">No Honors</MudSelectItem>
-                        <MudSelectItem Value="@("Cum Laude")">Cum Laude</MudSelectItem>
-                        <MudSelectItem Value="@("Magna Cum Laude")">Magna Cum Laude</MudSelectItem>
-                        <MudSelectItem Value="@("Summa Cum Laude")">Summa Cum Laude</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12">
-                    <MudSelect T="string" Label="Competencies" Variant="Variant.Outlined" MultiSelection="true"
-                               SelectedValues="predictSelectedSkills"
-                               SelectedValuesChanged="OnPredictSkillsChanged"
-                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Build"
-                               HelperText="Select all skills that apply">
-                        @foreach (var skill in predictSkillOptions)
-                        {
-                            <MudSelectItem T="string" Value="@skill">@skill</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
-                               StartIcon="@Icons.Material.Filled.Analytics"
-                               Disabled="@(!CanPredict || isPredicting)"
-                               OnClick="RunPrediction">
-                        @if (isPredicting)
-                        {
-                            <MudProgressCircular Color="Color.Inherit" Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                            <span>Predicting...</span>
-                        }
-                        else
-                        {
-                            <span>Predict My Career Outcome</span>
-                        }
-                    </MudButton>
-                </MudItem>
-            </MudGrid>
-
-            @if (predictionError != null)
-            {
-                <MudAlert Severity="Severity.Error" Class="mt-4">@predictionError</MudAlert>
-            }
-
-            @if (predictionResult != null)
-            {
-                <MudDivider Class="my-5" />
-
-                @* Headline outcome + confidence *@
-                <div class="d-flex flex-wrap align-center gap-3 mb-4">
-                    <MudChip T="string" Size="Size.Large"
-                             Color="@(predictionResult.PredictedOutcome == "ICT-Aligned" ? Color.Primary : Color.Info)"
-                             Variant="Variant.Filled"
-                             Style="font-size:1.1rem; font-weight:700; padding:8px 20px;">
-                        @predictionResult.PredictedOutcome
-                    </MudChip>
-                    <div>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary"
-                                 Style="text-transform:uppercase; letter-spacing:1px;">Confidence</MudText>
-                        <MudText Typo="Typo.h3" Color="Color.Primary"
-                                 Style="font-family:'Source Serif 4',serif; font-weight:700; line-height:1;">
-                            @((predictionResult.Confidence * 100).ToString("F0"))%
-                        </MudText>
-                    </div>
-                </div>
-
-                @* Class probabilities *@
-                <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mb-2"
-                         Style="font-weight:700;">Class Probabilities</MudText>
-                @foreach (var s in predictionResult.Scores)
-                {
-                    <div class="d-flex align-center mb-3" style="gap:12px;">
-                        <MudText Typo="Typo.body2" Style="width:160px; font-weight:500; flex-shrink:0;">@s.Label</MudText>
-                        <MudProgressLinear Value="@(s.Probability * 100)" Rounded="true" Size="Size.Large"
-                                           Color="@(s.Label == "ICT-Aligned" ? Color.Primary : Color.Info)"
-                                           Style="flex:1; height:24px;" />
-                        <MudText Typo="Typo.body2" Style="width:60px; font-weight:700; flex-shrink:0;">
-                            @((s.Probability * 100).ToString("F1"))%
-                        </MudText>
-                    </div>
-                }
-
-                @* Interpretation *@
-                @if (!string.IsNullOrWhiteSpace(predictionResult.Interpretation))
-                {
-                    <MudPaper Class="pa-4 mt-4" Elevation="0"
-                              Style="background:#f8f9fa; border-left:4px solid #007F3B; border-radius:6px;">
-                        <MudText Typo="Typo.body1" Style="line-height:1.7;">
-                            @predictionResult.Interpretation
-                        </MudText>
-                    </MudPaper>
-                }
-
-                @* Similar alumni jobs *@
-                @if (predictionResult.SimilarAlumniJobs?.Any() == true)
-                {
-                    <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mt-4 mb-2"
-                             Style="font-weight:700;">
-                        Alumni with similar profiles became:
-                    </MudText>
-                    <div class="d-flex flex-wrap gap-2">
-                        @foreach (var job in predictionResult.SimilarAlumniJobs)
-                        {
-                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium">
-                                @job
-                            </MudChip>
-                        }
-                    </div>
-                }
-
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-4 d-block"
-                         Style="font-style:italic;">
-                    Prediction based on historical patterns from 301 alumni — discuss with your guidance counselor.
-                </MudText>
-            }
-        </MudCardContent>
-    </MudCard>
-
     <div class="d-flex justify-center mb-4">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                    StartIcon="@Icons.Material.Filled.Refresh" OnClick="ResetAll">
@@ -309,18 +309,128 @@ else if (finalResult != null)
         </MudButton>
     </div>
 }
+else if (preludeStep < 2)
+{
+    @* ══════════ STEP 1: WELCOME (Login / Register / Guest) ══════════ *@
+    @if (preludeStep == 0)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
+            <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:700;">
+                Step 1 of 6 — Welcome
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Sign in to save your result, sign up if you're a new CITE student, or continue as a guest.
+            </MudText>
+        </MudPaper>
+
+        <MudGrid Spacing="4">
+            <MudItem xs="12" md="4">
+                <MudCard Elevation="3" Style="height:100%;">
+                    <MudCardContent Class="text-center pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Style="font-size:3rem;" />
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">Sign Up</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2 mb-3">
+                            Create a CITE student account so you can save and revisit your results.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenRegister">Sign Up</MudButton>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudCard Elevation="3" Style="height:100%;">
+                    <MudCardContent Class="text-center pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.Login" Color="Color.Primary" Style="font-size:3rem;" />
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">Sign In</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2 mb-3">
+                            Already have an account? Sign in to continue.
+                        </MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Login" OnClick="OpenLogin">Sign In</MudButton>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudCard Elevation="3" Style="height:100%;">
+                    <MudCardContent Class="text-center pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.NoAccounts" Color="Color.Secondary" Style="font-size:3rem;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-3">Continue as Guest</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2 mb-3">
+                            Try the assessment without an account. You'll see results, but can't save them.
+                        </MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.ArrowForward" OnClick="ContinueAsGuest">
+                            Continue as Guest
+                        </MudButton>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+
+    @* ══════════ STEP 2: CONSENT FORM ══════════ *@
+    else if (preludeStep == 1)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
+            <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:700;">
+                Step 2 of 6 — Consent
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Please review the data-use notice before continuing.
+            </MudText>
+        </MudPaper>
+
+        <MudCard Elevation="3" Class="mb-4">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Informed Consent</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-6">
+                <MudText Typo="Typo.body1" Class="mb-3">
+                    This assessment is part of a thesis project at the Nueva Vizcaya State University College of
+                    Information Technology Education (CITE). By proceeding, you understand that:
+                </MudText>
+                <ul style="line-height:1.8;">
+                    <li>Your RIASEC answers, Career Clarity ratings, academic profile (GWA, honors, competencies), and the resulting prediction are processed by the system to provide career guidance.</li>
+                    <li>If you are signed in as a student, the result you choose to save is stored under your account and visible only to you. You can delete it at any time from "My Saved Results".</li>
+                    <li>If you continue as a guest, nothing is persisted with your identity. Anonymous prediction logs may be kept for system diagnostics.</li>
+                    <li>The system uses OpenAI's GPT-4o-mini to generate the detailed analysis; your inputs are sent to the OpenAI API for that call.</li>
+                    <li>Predictions are statistical suggestions based on 301 CITE alumni records, not guarantees. Discuss your career plans with your academic adviser.</li>
+                </ul>
+                <MudCheckBox T="bool" @bind-Value="consentAccepted" Color="Color.Primary" Class="mt-4">
+                    I have read and agree to the data-use notice above.
+                </MudCheckBox>
+            </MudCardContent>
+        </MudCard>
+
+        <div class="d-flex justify-space-between mb-4">
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => preludeStep = 0)" Disabled="@Auth.IsAuthenticated">
+                Back
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick="StartQuiz" Disabled="@(!consentAccepted)">
+                Accept and Begin Assessment
+            </MudButton>
+        </div>
+    }
+}
 else
 {
-    @* ══════════ WIZARD STEPS ══════════ *@
+    @* ══════════ WIZARD STEPS 3-5 (Quiz / Clarity / Academics) ══════════ *@
 
-    @* Step Indicator *@
+    @* Step Indicator (6 chips total: Welcome ✓, Consent ✓, Quiz, Clarity, Academics, Results) *@
     <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
         <div class="d-flex justify-space-between align-center flex-wrap gap-2">
             @for (int s = 0; s < stepLabels.Length; s++)
             {
                 var stepIdx = s;
-                var isActive = stepIdx == wizardStep;
-                var isDone = stepIdx < wizardStep;
+                var globalIdx = stepIdx;            // 0..5
+                var preludeOffset = 2;              // Welcome(0), Consent(1) before wizardStep
+                var currentGlobal = preludeOffset + wizardStep;
+                var isDone = globalIdx < currentGlobal;
+                var isActive = globalIdx == currentGlobal;
                 <MudChip T="string" Size="Size.Medium"
                          Color="@(isActive ? Color.Primary : isDone ? Color.Success : Color.Default)"
                          Variant="@(isActive ? Variant.Filled : Variant.Outlined)">
@@ -331,7 +441,7 @@ else
         </div>
     </MudPaper>
 
-    @* ── STEP 1: RIASEC Quiz ── *@
+    @* ── STEP 3: RIASEC Quiz (wizardStep == 0) ── *@
     @if (wizardStep == 0)
     {
         @if (currentQuestion == 0)
@@ -413,7 +523,7 @@ else
         }
     }
 
-    @* ── STEP 2: Career Clarity ── *@
+    @* ── STEP 4: Career Clarity (wizardStep == 1) ── *@
     else if (wizardStep == 1)
     {
         <MudCard Elevation="3" Class="mb-4">
@@ -444,7 +554,6 @@ else
 
                 @if (desiredRoles.Count(r => !string.IsNullOrEmpty(r)) >= 3)
                 {
-                    @* A. Career Fit Ratings *@
                     <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">A. How well does each role match your personality? (1-5)</MudText>
                     @for (int r = 0; r < 3; r++)
                     {
@@ -456,7 +565,6 @@ else
                         </div>
                     }
 
-                    @* B. Excitement Ratings *@
                     <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">B. How excited are you about growing in each role? (1-5)</MudText>
                     @for (int r = 0; r < 3; r++)
                     {
@@ -468,7 +576,6 @@ else
                         </div>
                     }
 
-                    @* C. Motivation *@
                     <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">C. Career Choice Motivation (1-5)</MudText>
                     <div class="mb-3">
                         <MudText Typo="Typo.body1" Class="mb-1">I am genuinely interested in the type of work this career involves:</MudText>
@@ -483,7 +590,6 @@ else
                         <MudRating @bind-SelectedValue="familyExpectation" MaxValue="5" Color="Color.Primary" />
                     </div>
 
-                    @* D. Salary-Neutral Choice *@
                     <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-4 mb-2">D. If salary and job availability were equal, which career would you choose?</MudText>
                     <MudRadioGroup T="int" @bind-Value="salaryNeutralChoice">
                         @for (int r = 0; r < 3; r++)
@@ -501,17 +607,17 @@ else
                        OnClick="@(() => wizardStep = 0)">Back to RIASEC</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward"
                        OnClick="@(() => wizardStep = 2)"
-                       Disabled="@(!ClarityStepComplete)">Continue to Refinement</MudButton>
+                       Disabled="@(!ClarityStepComplete)">Continue to Academic Performance</MudButton>
         </div>
     }
 
-    @* ── STEP 3: GWA + Skills Refinement ── *@
+    @* ── STEP 5: Academic Performance (wizardStep == 2) ── *@
     else if (wizardStep == 2)
     {
         <MudCard Elevation="3" Class="mb-4">
             <MudCardHeader Style="background:#007F3B; color:#fff;">
                 <CardHeaderContent>
-                    <MudText Typo="Typo.h6">Academic Profile Refinement</MudText>
+                    <MudText Typo="Typo.h6">Academic Performance</MudText>
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent Class="pa-6">
@@ -559,7 +665,7 @@ else
                 @if (isSubmitting)
                 {
                     <MudProgressCircular Color="Color.Inherit" Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                    <span>Analyzing with AI...</span>
+                    <span>Predicting + analyzing with AI…</span>
                 }
                 else
                 {
@@ -581,9 +687,22 @@ else
 </style>
 
 @code {
-    // ── Wizard State ──
-    private int wizardStep = 0;
-    private static readonly string[] stepLabels = { "RIASEC Quiz", "Career Clarity", "GWA & Skills" };
+    // 6-step labels (the chip strip on the wizard pages always shows all six).
+    private static readonly string[] stepLabels =
+    {
+        "Welcome",
+        "Consent",
+        "RIASEC Quiz",
+        "Career Clarity",
+        "Academic Performance",
+        "Results"
+    };
+
+    // ── Prelude State ──
+    // preludeStep: 0 = Welcome (auth picker), 1 = Consent, 2 = ready to start the quiz.
+    // Authenticated users skip Welcome and land on Consent.
+    private int preludeStep = 0;
+    private bool consentAccepted = false;
 
     // ── Step 1: RIASEC ──
     private List<RiasecQuestion> questions = new();
@@ -591,7 +710,6 @@ else
     private int currentQuestion = 0;
     private bool isLoadingQuestions = true;
 
-    // Computed after Step 1
     private string computedCode = "";
     private List<string> computedDimensions = new();
     private List<string> suggestedRoles = new();
@@ -605,7 +723,8 @@ else
     private int familyExpectation = 0;
     private int salaryNeutralChoice = 0;
 
-    // ── Step 3: Refinement ──
+    // ── Step 3 / wizardStep == 2: Academic Performance ──
+    private int wizardStep = 0;       // 0=Quiz, 1=Clarity, 2=Academics
     private string gwaCategory = "";
     private string honorsCategory = "No Honors";
     private List<string> availableSkills = new();
@@ -616,28 +735,10 @@ else
     private bool isSubmitting;
     private string? errorMessage;
 
-    // ── Predict My Career Outcome (post-report) ──
-    private string predictGwa = "";
-    private string predictHonors = "No Honors";
-    private HashSet<string> predictSelectedSkills = new();
-    private List<string> predictSkillOptions = new()
-    {
-        "Information Technology Skills",
-        "Communication Skills",
-        "Problem-Solving Skills",
-        "Entrepreneurial Skills",
-        "Organizational Skills",
-        "Human Relations Skills",
-        "Critical Thinking"
-    };
-    private bool isPredicting;
-    private PredictionResult? predictionResult;
-    private string? predictionError;
-
-    private bool CanPredict =>
-        !string.IsNullOrEmpty(predictGwa) &&
-        !string.IsNullOrEmpty(predictHonors) &&
-        predictSelectedSkills.Count > 0;
+    // ── Save Result state ──
+    private bool isSaving = false;
+    private bool saveSucceeded = false;
+    private string saveError = "";
 
     private bool ClarityStepComplete =>
         desiredRoles.All(r => !string.IsNullOrEmpty(r)) &&
@@ -650,6 +751,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        Auth.AuthStateChanged += OnAuthChanged;
+
+        // If the user is already signed in, skip the auth picker.
+        if (Auth.IsAuthenticated) preludeStep = 1;
+
         try
         {
             var questionsTask = Http.GetFromJsonAsync<List<RiasecQuestion>>("api/riasec/questions");
@@ -657,10 +763,6 @@ else
             await Task.WhenAll(questionsTask, skillsTask);
             questions = questionsTask.Result ?? new();
             availableSkills = skillsTask.Result ?? new();
-            if (availableSkills.Count > 0)
-            {
-                predictSkillOptions = availableSkills;
-            }
         }
         catch
         {
@@ -672,6 +774,50 @@ else
         }
     }
 
+    public void Dispose()
+    {
+        Auth.AuthStateChanged -= OnAuthChanged;
+    }
+
+    private void OnAuthChanged()
+    {
+        // If sign-in/sign-up succeeds while the Welcome card is open, advance to Consent.
+        if (Auth.IsAuthenticated && preludeStep == 0) preludeStep = 1;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ── Prelude actions ──
+    private async Task OpenLogin()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true, NoHeader = true };
+        await DialogService.ShowAsync<CareerPath.Client.Components.LoginDialog>("Sign In", options);
+    }
+
+    private async Task OpenRegister()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true, NoHeader = true };
+        await DialogService.ShowAsync<CareerPath.Client.Components.RegisterDialog>("Student Sign Up", options);
+    }
+
+    private async Task OpenRegisterFromResults()
+    {
+        await OpenRegister();
+        // After register, Auth fires the change event and IsStudent flips; Save button becomes enabled.
+    }
+
+    private void ContinueAsGuest()
+    {
+        preludeStep = 1; // straight to Consent
+    }
+
+    private void StartQuiz()
+    {
+        if (!consentAccepted) return;
+        preludeStep = 2;
+        wizardStep = 0;
+        currentQuestion = 0;
+    }
+
     // ── RIASEC Helpers ──
     private string? GetRiasecAnswer(int qId) => riasecAnswers.TryGetValue(qId, out var v) ? v : null;
     private void SetRiasecAnswer(int qId, string val) => riasecAnswers[qId] = val;
@@ -680,7 +826,6 @@ else
 
     private async Task FinishRiasecStep()
     {
-        // Compute RIASEC code locally for display, then fetch suggested roles
         var scores = new Dictionary<string, int> { ["R"]=0,["I"]=0,["A"]=0,["S"]=0,["E"]=0,["C"]=0 };
         foreach (var v in riasecAnswers.Values)
             if (scores.ContainsKey(v)) scores[v]++;
@@ -721,14 +866,15 @@ else
         1 => "Not Excited", 2 => "Slightly", 3 => "Moderate", 4 => "Very Excited", 5 => "Extremely Excited", _ => ""
     };
 
-    // ── Skills ──
     private void ToggleSkill(string skill)
     {
         if (!selectedSkills.Remove(skill))
             selectedSkills.Add(skill);
     }
 
-    // ── Submit ──
+    // ── Submit: hits /api/riasec/assess with IncludePrediction = true so the
+    // single round-trip returns RIASEC + Clarity + MatchedJobs + Prediction +
+    // AiAnalysis (the AI prompt is seeded with the prediction). ──
     private async Task SubmitFullAssessment()
     {
         isSubmitting = true;
@@ -751,21 +897,16 @@ else
                 },
                 GwaCategory = gwaCategory,
                 Honors = honorsCategory,
-                Skills = selectedSkills.ToList()
+                Skills = selectedSkills.ToList(),
+                IncludePrediction = true
             };
 
             var response = await Http.PostAsJsonAsync("api/riasec/assess", input);
             if (response.IsSuccessStatusCode)
             {
                 finalResult = await response.Content.ReadFromJsonAsync<FullAssessmentResult>();
-
-                // Pre-fill the "Predict My Career Outcome" form using what the
-                // student already entered in Step 3.
-                predictGwa = gwaCategory;
-                predictHonors = string.IsNullOrEmpty(honorsCategory) ? "No Honors" : honorsCategory;
-                predictSelectedSkills = new HashSet<string>(selectedSkills);
-                predictionResult = null;
-                predictionError = null;
+                saveSucceeded = false;
+                saveError = "";
             }
             else
             {
@@ -780,6 +921,49 @@ else
         finally
         {
             isSubmitting = false;
+        }
+    }
+
+    private async Task SaveResult()
+    {
+        if (finalResult == null || finalResult.Prediction == null || !Auth.IsStudent) return;
+
+        isSaving = true;
+        saveError = "";
+        try
+        {
+            var req = new SaveResultRequest
+            {
+                Gwa = gwaCategory,
+                Honors = honorsCategory,
+                Competencies = string.Join(", ", selectedSkills),
+                DominantCode = finalResult.DominantCode,
+                ClarityLabel = finalResult.Clarity.ClarityLabel,
+                ClarityBucket = finalResult.Clarity.ClarityBucket,
+                ClarityTotal = finalResult.Clarity.TotalScore,
+                PredictedOutcome = finalResult.Prediction.PredictedOutcome,
+                PredictedConfidence = finalResult.Prediction.Confidence,
+                AiAnalysis = finalResult.AiAnalysis,
+                Notes = ""
+            };
+            var resp = await Http.PostAsJsonAsync("api/results", req);
+            if (resp.IsSuccessStatusCode)
+            {
+                saveSucceeded = true;
+                Snackbar.Add("Result saved to your account.", Severity.Success);
+            }
+            else
+            {
+                saveError = $"Save failed: {resp.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            saveError = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
         }
     }
 
@@ -804,72 +988,11 @@ else
         selectedSkills.Clear();
         finalResult = null;
         errorMessage = null;
-        predictGwa = "";
-        predictHonors = "No Honors";
-        predictSelectedSkills.Clear();
-        predictionResult = null;
-        predictionError = null;
-        isPredicting = false;
-    }
-
-    private async Task RunPrediction()
-    {
-        if (finalResult == null || !CanPredict) return;
-
-        isPredicting = true;
-        predictionError = null;
-        predictionResult = null;
-
-        try
-        {
-            // Prefer the discrete bucket (Low|Medium|High) populated by the server;
-            // fall back to a derivation from TotalScore if the server somehow
-            // didn't populate it.
-            var clarityBucket = !string.IsNullOrWhiteSpace(finalResult.Clarity.ClarityBucket)
-                ? finalResult.Clarity.ClarityBucket
-                : DeriveClarityBucket(finalResult.Clarity.TotalScore);
-
-            var input = new StudentInput
-            {
-                YearGraduated = DateTime.Now.Year,
-                Gwa = predictGwa,
-                Honors = predictHonors,
-                Competencies = string.Join(", ", predictSelectedSkills),
-                CareerClarity = clarityBucket,
-                Interest = finalResult.DominantCode
-            };
-
-            var response = await Http.PostAsJsonAsync("api/predict", input);
-            if (response.IsSuccessStatusCode)
-            {
-                predictionResult = await response.Content.ReadFromJsonAsync<PredictionResult>();
-            }
-            else
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                predictionError = $"Prediction failed: {(string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase : body)}";
-            }
-        }
-        catch (Exception ex)
-        {
-            predictionError = $"Could not reach the prediction service: {ex.Message}";
-        }
-        finally
-        {
-            isPredicting = false;
-        }
-    }
-
-    private static string DeriveClarityBucket(double totalScore)
-    {
-        if (totalScore >= 17) return "High";
-        if (totalScore >= 10) return "Medium";
-        return "Low";
-    }
-
-    private void OnPredictSkillsChanged(IEnumerable<string> values)
-    {
-        predictSelectedSkills = values?.ToHashSet() ?? new HashSet<string>();
+        saveSucceeded = false;
+        saveError = "";
+        // Stay on Consent (don't force the auth picker again).
+        preludeStep = Auth.IsAuthenticated ? 1 : 0;
+        consentAccepted = false;
     }
 
     // ── Score Display ──
@@ -899,4 +1022,3 @@ else
         _ => Color.Dark
     };
 }
-

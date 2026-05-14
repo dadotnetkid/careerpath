@@ -9,10 +9,17 @@ namespace CareerPath.Server.Controllers;
 public class RiasecController : ControllerBase
 {
     private readonly RiasecService _riasecService;
+    private readonly PredictionService _predictionService;
+    private readonly DatasetService _datasetService;
 
-    public RiasecController(RiasecService riasecService)
+    public RiasecController(
+        RiasecService riasecService,
+        PredictionService predictionService,
+        DatasetService datasetService)
     {
         _riasecService = riasecService;
+        _predictionService = predictionService;
+        _datasetService = datasetService;
     }
 
     /// <summary>Get the 10 multiple-choice RIASEC questions</summary>
@@ -70,7 +77,35 @@ public class RiasecController : ControllerBase
             MatchedJobs = matchedJobs
         };
 
-        // Step 5: Generate AI analysis
+        // Step 5a: Optionally run the binary classifier so the AI analysis can be
+        // seeded with the prediction outcome (GH issue #1, item 8 — keeps the two
+        // narratives consistent). The new wizard's Results step always sets this true.
+        if (input.IncludePrediction && _predictionService.IsReady)
+        {
+            try
+            {
+                var studentInput = new StudentInput
+                {
+                    YearGraduated = DateTime.Now.Year,
+                    Gwa = input.GwaCategory,
+                    Honors = input.Honors,
+                    Competencies = string.Join(", ", input.Skills),
+                    CareerClarity = clarity.ClarityBucket,
+                    Interest = dominantCode
+                };
+                var prediction = _predictionService.Predict(studentInput);
+                prediction.SimilarAlumniJobs = _datasetService.FindSimilarAlumniJobs(studentInput, prediction.PredictedOutcome);
+                result.Prediction = prediction;
+            }
+            catch
+            {
+                // Prediction is best-effort here — if the model isn't loaded the wizard
+                // can still show RIASEC + Clarity + Matched Jobs + AI Analysis.
+            }
+        }
+
+        // Step 5b: Generate AI analysis. When a prediction is attached it's passed
+        // into the prompt so the narrative aligns with the binary classifier.
         result.AiAnalysis = await _riasecService.GenerateAiAnalysis(result, input);
 
         return Ok(result);

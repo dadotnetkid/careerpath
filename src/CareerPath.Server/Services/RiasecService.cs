@@ -446,11 +446,25 @@ public class RiasecService
         var systemPrompt = @"You are a career guidance counselor at a Philippine university's College of Information Technology Education (CITE).
 You specialize in RIASEC assessments and career matching for IT students (BSIT, BSCS, BSIS programs).
 Provide encouraging, detailed, and actionable career guidance. Use clear language suitable for Filipino college students.
+
+When a binary ML PREDICTION is provided (ICT-Aligned vs Non-ICT-Aligned), your narrative MUST be consistent with it:
+  - If predicted ICT-Aligned: affirm the IT track and lean the recommended roles toward IT-core or IT-adjacent careers.
+  - If predicted Non-ICT-Aligned: acknowledge their RIASEC strengths and suggest cross-disciplinary or non-IT-primary roles where their skills transfer; do not contradict the prediction by telling them they are clearly suited for IT.
+  - Always quote the predicted confidence and explain it as a probability, not a guarantee.
+
 Structure your response with these sections, each separated by a blank line:
-PERSONALITY PROFILE, CAREER FIT ANALYSIS, YOUR CAREER CLARITY, TOP MATCHED ROLES, SKILLS TO DEVELOP, ACTIONABLE NEXT STEPS, ENCOURAGEMENT.";
+PERSONALITY PROFILE, CAREER FIT ANALYSIS, ML PREDICTION INTERPRETATION (only if a prediction was provided), YOUR CAREER CLARITY, TOP MATCHED ROLES, SKILLS TO DEVELOP, ACTIONABLE NEXT STEPS, ENCOURAGEMENT.";
 
         var jobList = string.Join("\n", result.MatchedJobs.Take(5)
             .Select((j, i) => $"  {i + 1}. {j.JobTitle} ({j.FieldOfIndustry}) — {j.MatchScore}% match, {j.AlumniCount} alumni"));
+
+        var predictionBlock = result.Prediction == null
+            ? "(No binary ML prediction available for this assessment.)"
+            : $@"Binary ML Prediction (Random Forest, trained on 301 CITE alumni):
+  - Outcome: {result.Prediction.PredictedOutcome}
+  - Confidence: {(result.Prediction.Confidence * 100):F1}%
+  - Class probabilities: {string.Join(", ", result.Prediction.Scores.Select(s => $"{s.Label}={(s.Probability * 100):F1}%"))}
+Align your narrative with this prediction (see the system message).";
 
         var userPrompt = $@"A CITE student just completed the full Career Path Assessment. Here are their results:
 
@@ -478,14 +492,17 @@ Skills: {string.Join(", ", input.Skills)}
 Top Matched Job Roles from Alumni Data:
 {jobList}
 
+{predictionBlock}
+
 Please provide a verbose, detailed analysis covering:
 1. PERSONALITY PROFILE — What their RIASEC code says about them in the IT field
 2. CAREER FIT ANALYSIS — Why the top matched roles suit their profile, with specific daily tasks they'd enjoy
-3. YOUR CAREER CLARITY — Interpret their clarity score. If low, provide guidance. If high, affirm their direction.
-4. TOP MATCHED ROLES — Explain each top 3 matched role, what alumni in those roles typically do, and why it matches
-5. SKILLS TO DEVELOP — Based on their current skills and gaps, recommend specific certifications and technologies
-6. ACTIONABLE NEXT STEPS — 4-5 concrete things to do right now (projects, certifications, activities)
-7. ENCOURAGEMENT — A motivating closing message
+3. ML PREDICTION INTERPRETATION (skip if no prediction was provided) — In plain language, explain what the binary outcome and confidence mean. Do NOT contradict it.
+4. YOUR CAREER CLARITY — Interpret their clarity score. If low, provide guidance. If high, affirm their direction.
+5. TOP MATCHED ROLES — Explain each top 3 matched role consistent with the prediction. If the prediction is Non-ICT-Aligned, highlight roles where their RIASEC strengths transfer outside core IT.
+6. SKILLS TO DEVELOP — Based on their current skills and gaps, recommend specific certifications and technologies
+7. ACTIONABLE NEXT STEPS — 4-5 concrete things to do right now (projects, certifications, activities)
+8. ENCOURAGEMENT — A motivating closing message
 
 Keep the tone warm and professional. Be specific to Philippine IT industry context.";
 

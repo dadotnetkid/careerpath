@@ -1,0 +1,140 @@
+@page "/my-results"
+@inject HttpClient Http
+@inject CareerPath.Client.Services.AuthService Auth
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>My Saved Results</PageTitle>
+
+<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
+    My Saved Results
+</MudText>
+
+@if (!Auth.IsStudent)
+{
+    <MudPaper Class="pa-6 mt-6 mx-auto" Elevation="0" Style="max-width:720px; text-align:center; border:1px solid #e0e0e0; border-radius:12px;">
+        <MudIcon Icon="@Icons.Material.Filled.BookmarkBorder" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h5" Class="mt-2 mb-2" Style="font-family:'Source Serif 4',serif;">Student account required</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">
+            Saved results are scoped to your CITE student account. Sign in (or sign up) to view your history.
+        </MudText>
+    </MudPaper>
+}
+else if (isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (results == null || results.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+        You haven't saved any results yet. Take the
+        <MudLink Href="riasec">Career Path Assessment</MudLink> and click <strong>Save This Result</strong> on the Results page.
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        @results.Count saved result(s). Click a row to expand the AI analysis.
+    </MudText>
+
+    @foreach (var r in results)
+    {
+        <MudExpansionPanels Elevation="1" Class="mb-3">
+            <MudExpansionPanel>
+                <TitleContent>
+                    <div class="d-flex justify-space-between align-center" style="width:100%;">
+                        <div>
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:700;">
+                                @r.PredictedOutcome
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-2">
+                                    @((r.PredictedConfidence * 100).ToString("F0"))% confidence
+                                </MudChip>
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                RIASEC @r.DominantCode · Clarity @r.ClarityLabel · GWA @r.Gwa · Honors @r.Honors
+                            </MudText>
+                        </div>
+                        <div class="text-right">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @r.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            </MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Default" Size="Size.Small"
+                                           OnClick="@(() => DeleteResult(r.Id))" aria-label="Delete this saved result" />
+                        </div>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        <strong>Competencies:</strong> @r.Competencies
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                        <strong>Clarity:</strong> @r.ClarityTotal/25 (@r.ClarityBucket)
+                    </MudText>
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.body1" Style="white-space:pre-line; line-height:1.7;">
+                        @r.AiAnalysis
+                    </MudText>
+                </ChildContent>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    private bool isLoading = true;
+    private List<CareerPath.Shared.SavedResultDto>? results;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.AuthStateChanged += OnAuthChanged;
+        await LoadResults();
+    }
+
+    public void Dispose()
+    {
+        Auth.AuthStateChanged -= OnAuthChanged;
+    }
+
+    private void OnAuthChanged() => InvokeAsync(LoadResults);
+
+    private async Task LoadResults()
+    {
+        isLoading = true;
+        if (!Auth.IsStudent)
+        {
+            results = null;
+            isLoading = false;
+            StateHasChanged();
+            return;
+        }
+        try
+        {
+            results = await Http.GetFromJsonAsync<List<CareerPath.Shared.SavedResultDto>>("api/results");
+        }
+        catch
+        {
+            results = new();
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task DeleteResult(int id)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Delete this saved result? This cannot be undone.");
+        if (!confirmed) return;
+
+        try
+        {
+            var resp = await Http.DeleteAsync($"api/results/{id}");
+            if (resp.IsSuccessStatusCode)
+            {
+                await LoadResults();
+            }
+        }
+        catch
+        {
+            // swallow — caller can retry
+        }
+    }
+}

@@ -161,6 +161,40 @@ try
         Console.WriteLine("Identity tables present.");
     }
 
+    // SavedResults table is a post-EnsureCreated addition (added with the
+    // wizard's "Save Result" feature). EF won't retro-add it to an existing
+    // DB, so we create it explicitly here. Idempotent.
+    try
+    {
+        db.Database.ExecuteSqlRaw(@"
+            IF OBJECT_ID(N'[dbo].[SavedResults]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[SavedResults] (
+                    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+                    [UserId] NVARCHAR(450) NOT NULL,
+                    [CreatedAt] DATETIME2 NOT NULL,
+                    [Gwa] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Honors] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Competencies] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [DominantCode] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [ClarityLabel] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [ClarityBucket] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [ClarityTotal] FLOAT NOT NULL DEFAULT 0,
+                    [PredictedOutcome] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [PredictedConfidence] REAL NOT NULL DEFAULT 0,
+                    [AiAnalysis] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Notes] NVARCHAR(MAX) NOT NULL DEFAULT ''
+                );
+                CREATE INDEX [IX_SavedResults_UserId_CreatedAt] ON [dbo].[SavedResults] ([UserId], [CreatedAt]);
+            END
+        ");
+        Console.WriteLine("SavedResults table present (created if missing).");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"SavedResults table check failed: {ex.Message}");
+    }
+
     // Seed roles ("Admin", "Student") then the admin user. Both are idempotent
     // so re-runs on each boot are safe. The admin user's password is NOT
     // overwritten if the user already exists — protects manual rotations.

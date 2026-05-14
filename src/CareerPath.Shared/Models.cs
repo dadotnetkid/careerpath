@@ -392,6 +392,14 @@ public class FullAssessmentInput
 
     /// <summary>Step 3: Selected competencies/skills</summary>
     public List<string> Skills { get; set; } = new();
+
+    /// <summary>
+    /// If true, the server also runs the binary classifier (/api/predict logic)
+    /// and includes the outcome in <see cref="FullAssessmentResult.Prediction"/>.
+    /// The AI analysis prompt is then seeded with the prediction so the two
+    /// narratives agree. The new wizard's Results step always sets this true.
+    /// </summary>
+    public bool IncludePrediction { get; set; } = false;
 }
 
 // ── Full Assessment Result ──
@@ -409,11 +417,14 @@ public class FullAssessmentResult
     // Matched Job Roles from alumni data
     public List<JobMatch> MatchedJobs { get; set; } = new();
 
-    // AI-generated detailed analysis
+    // AI-generated detailed analysis. With FullAssessmentInput.IncludePrediction = true,
+    // the prompt is seeded with the binary prediction outcome so the AI narrative and
+    // the prediction interpretation agree (GH issue #1, item 8).
     public string AiAnalysis { get; set; } = "";
 
-    // Binary ML prediction (ICT-Aligned vs Non-ICT-Aligned) — populated by /api/predict
-    // when student presses the "Predict my career outcome" button on the report.
+    // Binary ML prediction (ICT-Aligned vs Non-ICT-Aligned). Populated when
+    // FullAssessmentInput.IncludePrediction = true (the wizard's Results step
+    // requests both in one round-trip).
     public PredictionResult? Prediction { get; set; }
 }
 
@@ -424,4 +435,47 @@ public class JobMatch
     public string CareerAlignment { get; set; } = "";
     public int AlumniCount { get; set; }
     public double MatchScore { get; set; }  // 0-100
+}
+
+// ── Saved Results (student-facing persistence) ──
+//
+// A student can click "Save Result" on the wizard's Results step to persist a
+// snapshot of their full assessment + binary prediction. Saved rows are visible
+// only to the signed-in student (UserId scoped) and listed on /my-results.
+
+public class SaveResultRequest
+{
+    // Inputs (so the saved row is self-contained and re-renderable)
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
+    public string Competencies { get; set; } = "";
+
+    // Computed outputs
+    public string DominantCode { get; set; } = "";
+    public string ClarityLabel { get; set; } = "";
+    public string ClarityBucket { get; set; } = "";
+    public double ClarityTotal { get; set; }
+    public string PredictedOutcome { get; set; } = "";
+    public float PredictedConfidence { get; set; }
+    public string AiAnalysis { get; set; } = "";
+
+    // Optional student-supplied note
+    public string Notes { get; set; } = "";
+}
+
+public class SavedResultDto
+{
+    public int Id { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
+    public string Competencies { get; set; } = "";
+    public string DominantCode { get; set; } = "";
+    public string ClarityLabel { get; set; } = "";
+    public string ClarityBucket { get; set; } = "";
+    public double ClarityTotal { get; set; }
+    public string PredictedOutcome { get; set; } = "";
+    public float PredictedConfidence { get; set; }
+    public string AiAnalysis { get; set; } = "";
+    public string Notes { get; set; } = "";
 }
