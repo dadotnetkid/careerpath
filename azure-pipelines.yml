@@ -70,12 +70,15 @@ stages:
                 nuget | "$(Agent.OS)"
               path: $(NUGET_PACKAGES)
 
+          # NuGet.config at the repo root pins nuget.org and clears inherited
+          # sources, so the agent resolves packages the same way a dev box does.
           - task: DotNetCoreCLI@2
             displayName: Restore
             inputs:
               command: restore
               projects: $(solution)
               feedsToUse: config
+              nugetConfigPath: NuGet.config
 
           # Builds every project in the solution — Shared, ML, Client and Server —
           # so a break anywhere fails the pipeline, not just on the publish path.
