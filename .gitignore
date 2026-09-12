@@ -110,3 +110,8 @@ node_modules/
 *.swp
 *.swo
 *~
+
+# Python (tests/e2e)
+__pycache__/
+*.py[cod]
+.pytest_cache/
