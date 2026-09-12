@@ -32,7 +32,6 @@ pr:
 
 variables:
   buildConfiguration: Release
-  dotnetSdkVersion: 10.0.x
   solution: CareerPath.sln
   serverProject: src/CareerPath.Server/CareerPath.Server.csproj
   artifactName: careerpath-site
@@ -56,11 +55,13 @@ stages:
           - checkout: self
             fetchDepth: 1
 
+          # global.json pins the SDK, so the agent installs the same one
+          # developers build with rather than whatever 10.0.x is newest.
           - task: UseDotNet@2
-            displayName: Install .NET SDK $(dotnetSdkVersion)
+            displayName: Install the SDK pinned in global.json
             inputs:
               packageType: sdk
-              version: $(dotnetSdkVersion)
+              useGlobalJson: true
 
           - task: Cache@2
             displayName: Restore NuGet cache
