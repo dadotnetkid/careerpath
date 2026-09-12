@@ -229,3 +229,48 @@ Key finding: **Career Clarity and RIASEC Interest dominate the signal**, with Co
 | Seed 42 everywhere | Fixed across MLContext and train-test split for reproducible results |
 | Binary classification | Original 4-class labels collapsed to 2 (ICT-Aligned vs Non-ICT-Aligned) for reliability with small n |
 | Manual PFI implementation | ML.NET's built-in PFI requires specific transformer types; manual permutation on raw features gives the same result |
+
+---
+
+## Build Pipeline
+
+`azure-pipelines.yml` builds the solution and publishes a deployable artifact.
+It runs on pushes to `master` and on pull requests into it; it builds and
+packages only — nothing is deployed from here.
+
+| Stage | What happens |
+|-------|--------------|
+| Build | Installs the .NET 10 SDK, restores (with a cached NuGet folder), builds `CareerPath.sln`, publishes `CareerPath.Server`, checks the runtime assets are present, zips the output and publishes it |
+
+The artifact is named `careerpath-site` and holds one file,
+`CareerPath.Server.zip`, laid out for IIS or Azure App Service:
+
+```
+CareerPath.Server.dll, web.config, appsettings.json
+wwwroot/     published Blazor WebAssembly client
+MLModel/     model.zip, model_4class.zip, metrics + cv metrics JSON
+data/        alumni_gts3.csv
+logs/        pre-created for AspNetCoreModuleV2 stdout logs
+```
+
+Publishing the host pulls in the client, the models and the CSV on its own, so
+the zip runs as-is. The pipeline still verifies each of those paths before
+packaging, so a missing model or CSV fails the build instead of producing an
+artifact that starts and then 404s on `/api/metrics`.
+
+### Before deploying the artifact
+
+`appsettings.json` ships inside the zip with the development connection string,
+the seeded admin password and a placeholder OpenAI key. Override them on the
+target with environment variables or an `appsettings.Production.json` that is not
+in source control:
+
+| Setting | Environment variable |
+|---------|----------------------|
+| SQL Server connection | `ConnectionStrings__Default` |
+| OpenAI key | `OpenAI__ApiKey` |
+| Seeded admin | `Auth__AdminEmail`, `Auth__AdminPassword` |
+
+The end-to-end suites under `tests/e2e` are not wired into the pipeline: they
+need a running app, a reachable SQL Server and an OpenAI key. Run them against a
+deployed environment with `python3 tests/e2e/run_all.py --base-url https://<host>`.

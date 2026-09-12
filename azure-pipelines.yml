@@ -1,0 +1,151 @@
+# Career Path Recommendation System — build pipeline.
+#
+# Restores, builds and publishes the ASP.NET Core host (which carries the Blazor
+# WebAssembly client, the trained ML models and the alumni CSV) and hands the
+# result to Azure Pipelines as a versioned artifact. Releases pick that artifact
+# up; this pipeline does not deploy anywhere itself.
+#
+# The artifact holds a single zip, laid out for IIS / Azure App Service:
+#   CareerPath.Server.zip
+#     CareerPath.Server.dll, web.config, appsettings.json
+#     wwwroot/            the published Blazor client
+#     MLModel/            model.zip, model_4class.zip, metrics + cv metrics JSON
+#     data/               alumni_gts3.csv
+#     logs/               pre-created so AspNetCoreModuleV2 can write stdout logs
+
+trigger:
+  branches:
+    include:
+      - master
+  paths:
+    exclude:
+      - README.md
+      - requirements/**
+      - images/**
+      - tests/**
+      - System Details.pdf
+
+pr:
+  branches:
+    include:
+      - master
+
+variables:
+  buildConfiguration: Release
+  dotnetSdkVersion: 10.0.x
+  solution: CareerPath.sln
+  serverProject: src/CareerPath.Server/CareerPath.Server.csproj
+  artifactName: careerpath-site
+  publishDir: $(Build.ArtifactStagingDirectory)/site
+  packageDir: $(Build.ArtifactStagingDirectory)/package
+  # Keep NuGet packages on the agent between runs.
+  NUGET_PACKAGES: $(Pipeline.Workspace)/.nuget/packages
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+stages:
+  - stage: Build
+    displayName: Build and package
+    jobs:
+      - job: Publish
+        displayName: Publish CareerPath.Server
+        pool:
+          vmImage: ubuntu-latest
+
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: UseDotNet@2
+            displayName: Install .NET SDK $(dotnetSdkVersion)
+            inputs:
+              packageType: sdk
+              version: $(dotnetSdkVersion)
+
+          - task: Cache@2
+            displayName: Restore NuGet cache
+            inputs:
+              key: 'nuget | "$(Agent.OS)" | **/*.csproj'
+              restoreKeys: |
+                nuget | "$(Agent.OS)"
+              path: $(NUGET_PACKAGES)
+
+          - task: DotNetCoreCLI@2
+            displayName: Restore
+            inputs:
+              command: restore
+              projects: $(solution)
+              feedsToUse: config
+
+          # Builds every project in the solution — Shared, ML, Client and Server —
+          # so a break anywhere fails the pipeline, not just on the publish path.
+          - task: DotNetCoreCLI@2
+            displayName: Build solution
+            inputs:
+              command: build
+              projects: $(solution)
+              arguments: >-
+                --configuration $(buildConfiguration)
+                --no-restore
+                -p:ContinuousIntegrationBuild=true
+
+          # Publishing the host also publishes the Blazor client into wwwroot and
+          # copies MLModel/* and data/alumni_gts3.csv, so the output runs as-is.
+          - task: DotNetCoreCLI@2
+            displayName: Publish host
+            inputs:
+              command: publish
+              publishWebProjects: false
+              projects: $(serverProject)
+              arguments: >-
+                --configuration $(buildConfiguration)
+                --no-build
+                --output $(publishDir)
+              zipAfterPublish: false
+              modifyOutputPath: false
+
+          # Fail early and loudly if the runtime assets went missing, rather than
+          # shipping an artifact that starts and then 404s on /api/metrics.
+          - task: Bash@3
+            displayName: Verify runtime assets
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                required=(
+                  "CareerPath.Server.dll"
+                  "web.config"
+                  "appsettings.json"
+                  "wwwroot/index.html"
+                  "MLModel/model.zip"
+                  "MLModel/metrics.json"
+                  "MLModel/cv_metrics.json"
+                  "MLModel/diagnostic_metrics.json"
+                  "data/alumni_gts3.csv"
+                )
+                missing=0
+                for path in "${required[@]}"; do
+                  if [ -e "$(publishDir)/$path" ]; then
+                    echo "ok      $path"
+                  else
+                    echo "MISSING $path"
+                    missing=1
+                  fi
+                done
+                exit $missing
+
+          - task: ArchiveFiles@2
+            displayName: Package as CareerPath.Server.zip
+            inputs:
+              rootFolderOrFile: $(publishDir)
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(packageDir)/CareerPath.Server.zip
+              replaceExistingArchive: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: Publish artifact $(artifactName)
+            inputs:
+              targetPath: $(packageDir)
+              artifactName: $(artifactName)
+              publishLocation: pipeline
