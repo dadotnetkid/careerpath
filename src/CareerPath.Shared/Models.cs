@@ -486,6 +486,141 @@ public class FullAssessmentResult
     public PredictionResult? Prediction { get; set; }
 }
 
+/// <summary>
+/// The AI narrative split into the sections the prompt asks for, so the report
+/// can show each part beside the numbers it explains instead of one long block
+/// of text at the bottom.
+///
+/// Parsing is deliberately forgiving: the model writes headings as plain lines,
+/// as markdown bold (<c>**PERSONALITY PROFILE**</c>) or as markdown headers, and
+/// sometimes numbers them. Anything that does not match a known heading is kept
+/// in <see cref="Intro"/> or <see cref="Other"/> so no generated text is lost.
+/// </summary>
+public class AiAnalysisSections
+{
+    /// <summary>Text before the first recognised heading.</summary>
+    public string Intro { get; set; } = "";
+
+    public string PersonalityProfile { get; set; } = "";
+    public string CareerFit { get; set; } = "";
+    public string PredictionInterpretation { get; set; } = "";
+    public string CareerClarity { get; set; } = "";
+    public string TopMatchedRoles { get; set; } = "";
+    public string SkillsToDevelop { get; set; } = "";
+    public string NextSteps { get; set; } = "";
+    public string Encouragement { get; set; } = "";
+
+    /// <summary>Recognised-as-a-heading but unknown sections, kept verbatim.</summary>
+    public string Other { get; set; } = "";
+
+    /// <summary>The text this was parsed from.</summary>
+    public string Raw { get; set; } = "";
+
+    /// <summary>True when nothing but <see cref="Intro"/> could be identified.</summary>
+    public bool IsUnstructured =>
+        string.IsNullOrWhiteSpace(PersonalityProfile) &&
+        string.IsNullOrWhiteSpace(CareerFit) &&
+        string.IsNullOrWhiteSpace(PredictionInterpretation) &&
+        string.IsNullOrWhiteSpace(CareerClarity) &&
+        string.IsNullOrWhiteSpace(TopMatchedRoles) &&
+        string.IsNullOrWhiteSpace(SkillsToDevelop) &&
+        string.IsNullOrWhiteSpace(NextSteps) &&
+        string.IsNullOrWhiteSpace(Encouragement);
+
+    // Longest aliases first so "CAREER FIT ANALYSIS" is not eaten by "CAREER FIT".
+    private static readonly (string Heading, string Key)[] Aliases =
+    {
+        ("PERSONALITY PROFILE", nameof(PersonalityProfile)),
+        ("CAREER FIT ANALYSIS", nameof(CareerFit)),
+        ("CAREER FIT", nameof(CareerFit)),
+        ("ML PREDICTION INTERPRETATION", nameof(PredictionInterpretation)),
+        ("PREDICTION INTERPRETATION", nameof(PredictionInterpretation)),
+        ("YOUR CAREER CLARITY", nameof(CareerClarity)),
+        ("CAREER CLARITY", nameof(CareerClarity)),
+        ("TOP MATCHED ROLES", nameof(TopMatchedRoles)),
+        ("MATCHED ROLES", nameof(TopMatchedRoles)),
+        ("SKILLS TO DEVELOP", nameof(SkillsToDevelop)),
+        ("ACTIONABLE NEXT STEPS", nameof(NextSteps)),
+        ("NEXT STEPS", nameof(NextSteps)),
+        ("ENCOURAGEMENT", nameof(Encouragement))
+    };
+
+    public static AiAnalysisSections Parse(string? analysis)
+    {
+        var result = new AiAnalysisSections { Raw = analysis ?? "" };
+        if (string.IsNullOrWhiteSpace(analysis)) return result;
+
+        var buffers = new Dictionary<string, List<string>>();
+        var current = nameof(Intro);
+        buffers[current] = new List<string>();
+
+        foreach (var line in analysis.Replace("\r\n", "\n").Split('\n'))
+        {
+            var key = MatchHeading(line);
+            if (key != null)
+            {
+                current = key;
+                if (!buffers.ContainsKey(current)) buffers[current] = new List<string>();
+                continue;
+            }
+            buffers[current].Add(line);
+        }
+
+        foreach (var (key, lines) in buffers)
+        {
+            var text = string.Join("\n", lines).Trim();
+            if (text.Length == 0) continue;
+            switch (key)
+            {
+                case nameof(Intro): result.Intro = text; break;
+                case nameof(PersonalityProfile): result.PersonalityProfile = text; break;
+                case nameof(CareerFit): result.CareerFit = text; break;
+                case nameof(PredictionInterpretation): result.PredictionInterpretation = text; break;
+                case nameof(CareerClarity): result.CareerClarity = text; break;
+                case nameof(TopMatchedRoles): result.TopMatchedRoles = text; break;
+                case nameof(SkillsToDevelop): result.SkillsToDevelop = text; break;
+                case nameof(NextSteps): result.NextSteps = text; break;
+                case nameof(Encouragement): result.Encouragement = text; break;
+                default: result.Other = Append(result.Other, text); break;
+            }
+        }
+
+        // A narrative with no recognisable headings still has to be shown
+        // somewhere, so leave the whole thing in Intro.
+        if (result.IsUnstructured && string.IsNullOrWhiteSpace(result.Intro))
+            result.Intro = analysis.Trim();
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns the property name a heading line maps to, or null when the line
+    /// is body text. A heading is a short line whose letters, once markdown and
+    /// numbering are stripped, match one of the known headings.
+    /// </summary>
+    private static string? MatchHeading(string line)
+    {
+        var trimmed = line.Trim();
+        if (trimmed.Length == 0 || trimmed.Length > 60) return null;
+
+        var cleaned = trimmed.Trim('#', '*', '_', ' ', '\t', ':', '-', '.', '"');
+        // Drop any "3." / "3)" numbering the model adds to the section list.
+        cleaned = cleaned.TrimStart('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '.', ')');
+        cleaned = cleaned.Trim('#', '*', '_', ' ', '\t', ':', '-', '.', '"').ToUpperInvariant();
+        if (cleaned.Length == 0) return null;
+
+        foreach (var (heading, key) in Aliases)
+        {
+            if (cleaned == heading || cleaned.StartsWith(heading + " ", StringComparison.Ordinal))
+                return key;
+        }
+        return null;
+    }
+
+    private static string Append(string existing, string addition) =>
+        string.IsNullOrWhiteSpace(existing) ? addition : existing + "\n\n" + addition;
+}
+
 public class JobMatch
 {
     public string JobTitle { get; set; } = "";

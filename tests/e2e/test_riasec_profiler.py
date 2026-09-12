@@ -277,6 +277,46 @@ def test_ui_results(cfg, report, page):
     report.check("the report shows the ML prediction",
                  "ICT-Aligned" in body or "Non-ICT-Aligned" in body)
 
+    test_ui_analysis_placement(report, page, body)
+
+
+def card_text(page, heading: str) -> str:
+    """Lower-cased text of the results card whose header contains `heading`.
+
+    Note headings are uppercased with CSS, and inner_text() returns rendered
+    text, so every comparison here is case-insensitive.
+    """
+    return page.locator(f".mud-card:has-text('{heading}')").first.inner_text().lower()
+
+
+def test_ui_analysis_placement(report, page, body):
+    """The AI narrative is split across the cards it explains, not dumped at the end."""
+    report.section("AI narrative placement (--full)")
+
+    if "currently unavailable" in body:
+        report.skip("narrative placement checks",
+                    "server returned the offline fallback — set OpenAI:ApiKey in user secrets")
+        return
+
+    report.check("the old single wall of analysis is gone",
+                 "Detailed AI Career Analysis" not in body)
+
+    placements = [
+        ("RIASEC Dimension Scores", "What your interests say"),
+        ("Career Clarity Breakdown", "What your clarity score means"),
+        ("Top Matched Job Roles", "Why these roles fit your profile"),
+        ("Predicted Career Outcome", "What this prediction means"),
+    ]
+    for card, note in placements:
+        report.check(f"'{note}' sits in the {card} card", note.lower() in card_text(page, card))
+
+    closing = card_text(page, "Where to Go From Here")
+    report.check("the closing card carries the skills advice", "skills to develop" in closing)
+    report.check("the closing card carries the next steps", "your next steps" in closing)
+    report.check("the closing card carries the encouragement", "encouragement" in closing)
+    report.check("the closing card is not repeating the whole narrative",
+                 "what your interests say" not in closing and "what your clarity score means" not in closing)
+
 
 if __name__ == "__main__":
     sys.exit(run_module(run, __doc__))

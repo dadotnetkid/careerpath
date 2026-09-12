@@ -100,6 +100,8 @@ else if (finalResult != null)
                     </MudPaper>
                 }
 
+                <AnalysisNote Title="What this prediction means" Text="@analysis.PredictionInterpretation" />
+
                 @if (finalResult.Prediction.SimilarAlumniJobs?.Any() == true)
                 {
                     <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mt-4 mb-2"
@@ -197,6 +199,8 @@ else if (finalResult != null)
                             <MudProgressLinear Value="@(dim.Score * 100.0 / RiasecScale.MaxAreaScore)" Rounded="true" Size="Size.Large" Color="@dim.Color" />
                         </div>
                     }
+
+                    <AnalysisNote Title="What your interests say" Text="@analysis.PersonalityProfile" />
                 </MudCardContent>
             </MudCard>
         </MudItem>
@@ -238,6 +242,8 @@ else if (finalResult != null)
                     <MudChip T="string" Color="@GetClarityColor(finalResult.Clarity.ClarityLabel)" Size="Size.Large" Class="mt-2">
                         @finalResult.Clarity.ClarityLabel
                     </MudChip>
+
+                    <AnalysisNote Title="What your clarity score means" Text="@analysis.CareerClarity" />
                 </MudCardContent>
             </MudCard>
         </MudItem>
@@ -282,25 +288,41 @@ else if (finalResult != null)
                     }
                 </tbody>
             </MudSimpleTable>
+
+            <AnalysisNote Title="Why these roles fit your profile" Text="@analysis.CareerFit" />
+            <AnalysisNote Title="A closer look at your top matches" Text="@analysis.TopMatchedRoles" />
         </MudCardContent>
     </MudCard>
 
-    @* AI Analysis — now seeded with the prediction so it agrees ══════════ *@
-    <MudCard Elevation="3" Class="mb-4">
-        <MudCardHeader Style="background:#007F3B; color:#fff;">
-            <CardHeaderContent>
-                <MudText Typo="Typo.h6">
-                    <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" Style="vertical-align:middle;" />
-                    Detailed AI Career Analysis (GPT-4o mini)
-                </MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent Class="pa-6">
-            <MudText Typo="Typo.body1" Style="white-space:pre-line; line-height:1.8;">
-                @finalResult.AiAnalysis
-            </MudText>
-        </MudCardContent>
-    </MudCard>
+    @* ══════════ Where to go next ══════════
+       The rest of the AI narrative is shown beside the numbers it explains —
+       the profile with the score bars, the clarity reading with the clarity
+       breakdown, the fit analysis with the matched roles. What is left here is
+       the forward-looking advice, so the bottom of the report is a short plan
+       rather than a wall of text. *@
+    @if (HasForwardLookingAnalysis)
+    {
+        <MudCard Elevation="3" Class="mb-4">
+            <MudCardHeader Style="background:#007F3B; color:#fff;">
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" Style="vertical-align:middle;" />
+                        Where to Go From Here (GPT-4o mini)
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-6">
+                <AnalysisNote Title="Skills to develop" Text="@analysis.SkillsToDevelop" Class="" />
+                <AnalysisNote Title="Your next steps" Text="@analysis.NextSteps" />
+                <AnalysisNote Title="Encouragement" Text="@analysis.Encouragement" />
+
+                @* Anything the narrative said outside the known headings still
+                   gets shown, so no generated text is silently dropped. *@
+                <AnalysisNote Text="@analysis.Intro" />
+                <AnalysisNote Text="@analysis.Other" />
+            </MudCardContent>
+        </MudCard>
+    }
 
     <div class="d-flex justify-center mb-4">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
@@ -749,6 +771,17 @@ else
 
     // ── Final ──
     private FullAssessmentResult? finalResult;
+
+    // The AI narrative split into its sections so each one can sit beside the
+    // numbers it explains. Reparsed whenever a result arrives.
+    private AiAnalysisSections analysis = new();
+
+    private bool HasForwardLookingAnalysis =>
+        !string.IsNullOrWhiteSpace(analysis.SkillsToDevelop) ||
+        !string.IsNullOrWhiteSpace(analysis.NextSteps) ||
+        !string.IsNullOrWhiteSpace(analysis.Encouragement) ||
+        !string.IsNullOrWhiteSpace(analysis.Intro) ||
+        !string.IsNullOrWhiteSpace(analysis.Other);
     private bool isSubmitting;
     private string? errorMessage;
 
@@ -949,6 +982,7 @@ else
             if (response.IsSuccessStatusCode)
             {
                 finalResult = await response.Content.ReadFromJsonAsync<FullAssessmentResult>();
+                analysis = AiAnalysisSections.Parse(finalResult?.AiAnalysis);
                 saveSucceeded = false;
                 saveError = "";
             }
@@ -1031,6 +1065,7 @@ else
         honorsCategory = "No Honors";
         selectedSkills.Clear();
         finalResult = null;
+        analysis = new();
         errorMessage = null;
         saveSucceeded = false;
         saveError = "";

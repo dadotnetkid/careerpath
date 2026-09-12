@@ -1,4 +1,4 @@
-@page "/my-results"
+﻿@page "/my-results"
 @inject HttpClient Http
 @inject CareerPath.Client.Services.AuthService Auth
 @inject IJSRuntime JS
@@ -71,9 +71,19 @@ else
                         <strong>Clarity:</strong> @r.ClarityTotal/25 (@r.ClarityBucket)
                     </MudText>
                     <MudDivider Class="my-2" />
-                    <MudText Typo="Typo.body1" Style="white-space:pre-line; line-height:1.7;">
-                        @r.AiAnalysis
-                    </MudText>
+                    @* Same section split as the live report, so a saved result
+                       reads the same way rather than as one block of text. *@
+                    @{ var sections = CareerPath.Shared.AiAnalysisSections.Parse(r.AiAnalysis); }
+                    <AnalysisNote Title="What your interests say" Text="@sections.PersonalityProfile" Class="" />
+                    <AnalysisNote Title="What this prediction means" Text="@sections.PredictionInterpretation" />
+                    <AnalysisNote Title="What your clarity score means" Text="@sections.CareerClarity" />
+                    <AnalysisNote Title="Why these roles fit your profile" Text="@sections.CareerFit" />
+                    <AnalysisNote Title="A closer look at your top matches" Text="@sections.TopMatchedRoles" />
+                    <AnalysisNote Title="Skills to develop" Text="@sections.SkillsToDevelop" />
+                    <AnalysisNote Title="Your next steps" Text="@sections.NextSteps" />
+                    <AnalysisNote Title="Encouragement" Text="@sections.Encouragement" />
+                    <AnalysisNote Text="@sections.Intro" />
+                    <AnalysisNote Text="@sections.Other" />
                 </ChildContent>
             </MudExpansionPanel>
         </MudExpansionPanels>

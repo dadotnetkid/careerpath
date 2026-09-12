@@ -1,0 +1,31 @@
+@* One slice of the AI narrative, shown beside the numbers it explains.
+   Renders nothing when the section is missing, so a narrative that skipped a
+   heading leaves no empty box behind. *@
+
+@if (!string.IsNullOrWhiteSpace(Text))
+{
+    <MudPaper Class="@($"pa-4 {Class}")" Elevation="0"
+              Style="background:#f8f9fa; border-left:4px solid #007F3B; border-radius:6px;">
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mb-2"
+                     Style="font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
+                <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small"
+                         Class="mr-1" Style="vertical-align:middle;" />
+                @Title
+            </MudText>
+        }
+        <MudText Typo="Typo.body1" Style="white-space:pre-line; line-height:1.7;">@Text</MudText>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Heading shown above the text. Omit for an unlabelled note.</summary>
+    [Parameter] public string Title { get; set; } = "";
+
+    /// <summary>The section text. When blank the whole note is skipped.</summary>
+    [Parameter] public string Text { get; set; } = "";
+
+    /// <summary>Extra CSS classes, typically margin.</summary>
+    [Parameter] public string Class { get; set; } = "mt-4";
+}

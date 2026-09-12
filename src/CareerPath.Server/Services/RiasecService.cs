@@ -358,8 +358,19 @@ When a binary ML PREDICTION is provided (ICT-Aligned vs Non-ICT-Aligned), your n
   - If predicted Non-ICT-Aligned: acknowledge their RIASEC strengths and suggest cross-disciplinary or non-IT-primary roles where their skills transfer; do not contradict the prediction by telling them they are clearly suited for IT.
   - Always quote the predicted confidence and explain it as a probability, not a guarantee.
 
-Structure your response with these sections, each separated by a blank line:
-PERSONALITY PROFILE, CAREER FIT ANALYSIS, ML PREDICTION INTERPRETATION (only if a prediction was provided), YOUR CAREER CLARITY, TOP MATCHED ROLES, SKILLS TO DEVELOP, ACTIONABLE NEXT STEPS, ENCOURAGEMENT.";
+The report shows each section beside the numbers it explains, so the headings must be machine-readable:
+  - Put each heading on a line of its own, in capitals, spelled exactly as listed below, with nothing else on that line.
+  - Do not number the headings and do not invent headings of your own.
+  - Keep each section self-contained; the reader sees it on its own, away from the others.
+
+PERSONALITY PROFILE
+CAREER FIT ANALYSIS
+ML PREDICTION INTERPRETATION (include only when a prediction was provided)
+YOUR CAREER CLARITY
+TOP MATCHED ROLES
+SKILLS TO DEVELOP
+ACTIONABLE NEXT STEPS
+ENCOURAGEMENT";
 
         var jobList = string.Join("\n", result.MatchedJobs.Take(5)
             .Select((j, i) => $"  {i + 1}. {j.JobTitle} ({j.FieldOfIndustry}) — {j.MatchScore}% match, {j.AlumniCount} alumni"));
