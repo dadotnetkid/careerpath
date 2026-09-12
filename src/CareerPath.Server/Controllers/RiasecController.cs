@@ -22,7 +22,7 @@ public class RiasecController : ControllerBase
         _datasetService = datasetService;
     }
 
-    /// <summary>Get the 10 multiple-choice RIASEC questions</summary>
+    /// <summary>Get the 30 O*NET Interest Profiler work-activity items</summary>
     [HttpGet("questions")]
     public ActionResult<List<RiasecQuestion>> GetQuestions()
     {
@@ -54,9 +54,17 @@ public class RiasecController : ControllerBase
         if (input.RiasecAnswers == null || input.RiasecAnswers.Count == 0)
             return BadRequest(new { error = "No RIASEC answers provided." });
 
-        var validKeys = new HashSet<string> { "R", "I", "A", "S", "E", "C" };
-        if (input.RiasecAnswers.Values.Any(v => !validKeys.Contains(v)))
-            return BadRequest(new { error = "Invalid RIASEC key in answers." });
+        var questions = _riasecService.GetQuestions();
+        var validIds = questions.Select(q => q.Id).ToHashSet();
+
+        if (input.RiasecAnswers.Keys.Any(id => !validIds.Contains(id)))
+            return BadRequest(new { error = "Unknown Interest Profiler question id in answers." });
+
+        if (input.RiasecAnswers.Values.Any(v => v < RiasecScale.Min || v > RiasecScale.Max))
+            return BadRequest(new { error = $"Answer ratings must be between {RiasecScale.Min} and {RiasecScale.Max}." });
+
+        if (input.RiasecAnswers.Count != questions.Count)
+            return BadRequest(new { error = $"All {questions.Count} Interest Profiler items must be answered." });
 
         // Step 1: Compute RIASEC scores & dominant code
         var riasecScores = _riasecService.ComputeRiasecScores(input.RiasecAnswers);

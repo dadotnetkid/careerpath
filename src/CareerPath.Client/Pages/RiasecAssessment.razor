@@ -1,4 +1,4 @@
-@page "/riasec"
+﻿@page "/riasec"
 @inject HttpClient Http
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -192,9 +192,9 @@ else if (finalResult != null)
                         <div class="mb-4">
                             <div class="d-flex justify-space-between mb-1">
                                 <MudText Typo="Typo.body1" Style="font-weight:600;">@dim.Name (@dim.Code)</MudText>
-                                <MudText Typo="Typo.body1" Style="font-weight:700;">@dim.Score / 10</MudText>
+                                <MudText Typo="Typo.body1" Style="font-weight:700;">@dim.Score / @RiasecScale.MaxAreaScore</MudText>
                             </div>
-                            <MudProgressLinear Value="@(dim.Score * 10)" Rounded="true" Size="Size.Large" Color="@dim.Color" />
+                            <MudProgressLinear Value="@(dim.Score * 100.0 / RiasecScale.MaxAreaScore)" Rounded="true" Size="Size.Large" Color="@dim.Color" />
                         </div>
                     }
                 </MudCardContent>
@@ -441,19 +441,23 @@ else
         </div>
     </MudPaper>
 
-    @* ── STEP 3: RIASEC Quiz (wizardStep == 0) ── *@
+    @* ── STEP 3: RIASEC Quiz — O*NET Interest Profiler (wizardStep == 0) ── *@
     @if (wizardStep == 0)
     {
-        @if (currentQuestion == 0)
+        @if (currentPage == 0)
         {
             <MudCard Elevation="3" Class="mb-4">
                 <MudCardContent Class="pa-6">
-                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">RIASEC Interest Assessment</MudText>
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">O*NET Interest Profiler</MudText>
                     <MudText Typo="Typo.body1" Class="mb-3">
-                        The RIASEC model identifies six personality types: <strong>Realistic, Investigative, Artistic, Social, Enterprising,</strong> and <strong>Conventional</strong>.
+                        The RIASEC model identifies six interest areas: <strong>Realistic, Investigative, Artistic, Social, Enterprising,</strong> and <strong>Conventional</strong>.
                     </MudText>
-                    <MudText Typo="Typo.body1">
-                        Answer <strong>10 scenario-based questions</strong>. Pick the option that best describes you. No right or wrong answers!
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        You will see <strong>@questions.Count work activities</strong>. For each one, decide how much you would
+                        <strong>like</strong> doing it — not whether you already know how, and not how much education it needs or how much it pays.
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        There are no right or wrong answers.
                     </MudText>
                 </MudCardContent>
             </MudCard>
@@ -461,45 +465,55 @@ else
 
         <MudPaper Class="pa-4 mb-4" Elevation="2" Style="border-radius:12px;">
             <div class="d-flex justify-space-between align-center mb-2">
-                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Question @(currentQuestion + 1) of @questions.Count</MudText>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Page @(currentPage + 1) of @PageCount</MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary">@riasecAnswers.Count / @questions.Count answered</MudText>
             </div>
-            <MudProgressLinear Value="@((double)riasecAnswers.Count / questions.Count * 100)" Rounded="true" Size="Size.Medium" Color="Color.Primary" />
+            <MudProgressLinear Value="@(questions.Count == 0 ? 0 : (double)riasecAnswers.Count / questions.Count * 100)" Rounded="true" Size="Size.Medium" Color="Color.Primary" />
         </MudPaper>
 
         @if (questions.Count > 0)
         {
-            var q = questions[currentQuestion];
             <MudCard Elevation="3" Class="mb-4">
                 <MudCardHeader Style="background:#007F3B; color:#fff;">
                     <CardHeaderContent>
-                        <MudText Typo="Typo.h6">Scenario @q.Id</MudText>
+                        <MudText Typo="Typo.h6">How much would you like this activity?</MudText>
                     </CardHeaderContent>
                 </MudCardHeader>
                 <MudCardContent Class="pa-6">
-                    <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight:600; line-height:1.5;">@q.Scenario</MudText>
-                    <MudRadioGroup T="string" Value="@GetRiasecAnswer(q.Id)" ValueChanged="@(val => SetRiasecAnswer(q.Id, val))">
-                        @foreach (var opt in q.Options)
-                        {
-                            <MudPaper Class="pa-3 mb-2" Elevation="@(GetRiasecAnswer(q.Id) == opt.Key ? 2 : 0)"
-                                      Style="@($"border-radius:8px; border:2px solid {(GetRiasecAnswer(q.Id) == opt.Key ? "#007F3B" : "#e0e0e0")}; cursor:pointer; transition:all 0.2s;")">
-                                <MudRadio T="string" Value="@opt.Key" Color="Color.Primary" Dense="true">
-                                    <MudText Typo="Typo.body1">@opt.Text</MudText>
-                                </MudRadio>
-                            </MudPaper>
-                        }
-                    </MudRadioGroup>
+                    @foreach (var q in CurrentPageQuestions)
+                    {
+                        var item = q;
+                        var answered = GetRiasecAnswer(item.Id) != null;
+                        <MudPaper Class="pa-4 mb-3" Elevation="@(answered ? 2 : 0)"
+                                  Style="@($"border-radius:8px; border:2px solid {(answered ? "#007F3B" : "#e0e0e0")}; transition:all 0.2s;")">
+                            <MudText Typo="Typo.body1" Class="mb-3" Style="font-weight:600; line-height:1.5;">
+                                @QuestionNumber(item). @item.Text
+                            </MudText>
+                            <MudRadioGroup T="int?" Value="@GetRiasecAnswer(item.Id)"
+                                           ValueChanged="@(val => SetRiasecAnswer(item.Id, val))">
+                                <div class="d-flex flex-wrap gap-3">
+                                    @for (int v = RiasecScale.Min; v <= RiasecScale.Max; v++)
+                                    {
+                                        var rating = v;
+                                        <MudRadio T="int?" Value="@((int?)rating)" Color="Color.Primary" Dense="true">
+                                            <MudText Typo="Typo.body2">@RiasecScale.LabelFor(rating)</MudText>
+                                        </MudRadio>
+                                    }
+                                </div>
+                            </MudRadioGroup>
+                        </MudPaper>
+                    }
                 </MudCardContent>
             </MudCard>
 
             <div class="d-flex justify-space-between mb-4">
-                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(currentQuestion == 0)"
-                           StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="PrevQuestion">Previous</MudButton>
-                @if (currentQuestion < questions.Count - 1)
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(currentPage == 0)"
+                           StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="PrevPage">Previous</MudButton>
+                @if (currentPage < PageCount - 1)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="NextQuestion"
-                               Disabled="@(GetRiasecAnswer(q.Id) == null)">Next</MudButton>
+                               EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="NextPage"
+                               Disabled="@(!CurrentPageComplete)">Next</MudButton>
                 }
                 else
                 {
@@ -510,14 +524,14 @@ else
             </div>
 
             <div class="d-flex justify-center flex-wrap gap-2 mb-4">
-                @for (int i = 0; i < questions.Count; i++)
+                @for (int i = 0; i < PageCount; i++)
                 {
                     var idx = i;
-                    var answered = riasecAnswers.ContainsKey(questions[idx].Id);
-                    var isCurrent = idx == currentQuestion;
-                    <MudIconButton Icon="@(answered ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
-                                   Color="@(isCurrent ? Color.Primary : answered ? Color.Success : Color.Default)"
-                                   Size="Size.Small" OnClick="@(() => currentQuestion = idx)" />
+                    var complete = PageComplete(idx);
+                    var isCurrent = idx == currentPage;
+                    <MudIconButton Icon="@(complete ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)"
+                                   Color="@(isCurrent ? Color.Primary : complete ? Color.Success : Color.Default)"
+                                   Size="Size.Small" OnClick="@(() => currentPage = idx)" />
                 }
             </div>
         }
@@ -704,10 +718,13 @@ else
     private int preludeStep = 0;
     private bool consentAccepted = false;
 
-    // ── Step 1: RIASEC ──
+    // ── Step 1: RIASEC (O*NET Interest Profiler) ──
+    // Items are shown a page at a time; each answer is a 0-4 rating on RiasecScale.
+    private const int QuestionsPerPage = 6;
+
     private List<RiasecQuestion> questions = new();
-    private Dictionary<int, string> riasecAnswers = new();
-    private int currentQuestion = 0;
+    private Dictionary<int, int> riasecAnswers = new();
+    private int currentPage = 0;
     private bool isLoadingQuestions = true;
 
     private string computedCode = "";
@@ -815,20 +832,47 @@ else
         if (!consentAccepted) return;
         preludeStep = 2;
         wizardStep = 0;
-        currentQuestion = 0;
+        currentPage = 0;
     }
 
     // ── RIASEC Helpers ──
-    private string? GetRiasecAnswer(int qId) => riasecAnswers.TryGetValue(qId, out var v) ? v : null;
-    private void SetRiasecAnswer(int qId, string val) => riasecAnswers[qId] = val;
-    private void NextQuestion() { if (currentQuestion < questions.Count - 1) currentQuestion++; }
-    private void PrevQuestion() { if (currentQuestion > 0) currentQuestion--; }
+    private int PageCount => questions.Count == 0
+        ? 1
+        : (questions.Count + QuestionsPerPage - 1) / QuestionsPerPage;
+
+    private IEnumerable<RiasecQuestion> CurrentPageQuestions =>
+        questions.Skip(currentPage * QuestionsPerPage).Take(QuestionsPerPage);
+
+    private int QuestionNumber(RiasecQuestion q) => questions.IndexOf(q) + 1;
+
+    private bool PageComplete(int page) =>
+        questions.Skip(page * QuestionsPerPage).Take(QuestionsPerPage)
+                 .All(q => riasecAnswers.ContainsKey(q.Id));
+
+    private bool CurrentPageComplete => PageComplete(currentPage);
+
+    private int? GetRiasecAnswer(int qId) => riasecAnswers.TryGetValue(qId, out var v) ? v : null;
+
+    private void SetRiasecAnswer(int qId, int? val)
+    {
+        if (val is null) riasecAnswers.Remove(qId);
+        else riasecAnswers[qId] = val.Value;
+    }
+
+    private void NextPage() { if (currentPage < PageCount - 1) currentPage++; }
+    private void PrevPage() { if (currentPage > 0) currentPage--; }
 
     private async Task FinishRiasecStep()
     {
+        // Mirror of RiasecService.ComputeRiasecScores — sum each item's 0-4 rating
+        // into the RIASEC area that item belongs to. Used only to fetch suggested
+        // roles for the next step; the server recomputes the authoritative scores.
         var scores = new Dictionary<string, int> { ["R"]=0,["I"]=0,["A"]=0,["S"]=0,["E"]=0,["C"]=0 };
-        foreach (var v in riasecAnswers.Values)
-            if (scores.ContainsKey(v)) scores[v]++;
+        foreach (var q in questions)
+        {
+            if (!riasecAnswers.TryGetValue(q.Id, out var rating)) continue;
+            if (scores.ContainsKey(q.Area)) scores[q.Area] += rating;
+        }
 
         var ranked = scores.OrderByDescending(x => x.Value).Take(3).ToList();
         computedCode = string.Join("", ranked.Select(x => x.Key));
@@ -971,7 +1015,7 @@ else
     private void ResetAll()
     {
         wizardStep = 0;
-        currentQuestion = 0;
+        currentPage = 0;
         riasecAnswers.Clear();
         computedCode = "";
         computedDimensions.Clear();

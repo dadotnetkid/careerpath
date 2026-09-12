@@ -332,18 +332,51 @@ public class AuthStatusDto
 
 // ── RIASEC + Career Clarity Workflow ──
 
+/// <summary>
+/// One work-activity item of the O*NET Interest Profiler (30-item short form).
+/// The student rates how much they would like doing the activity on the
+/// 5-point Likert scale in <see cref="RiasecScale"/>.
+/// </summary>
 public class RiasecQuestion
 {
     public int Id { get; set; }
-    public string Scenario { get; set; } = "";
-    public List<RiasecOption> Options { get; set; } = new();
+
+    /// <summary>The work activity, e.g. "Build kitchen cabinets".</summary>
+    public string Text { get; set; } = "";
+
+    /// <summary>RIASEC area this item scores: "R", "I", "A", "S", "E" or "C".</summary>
+    public string Area { get; set; } = "";
+
+    /// <summary>Full area name, e.g. "Realistic". Not shown while answering.</summary>
+    public string AreaName { get; set; } = "";
 }
 
-public class RiasecOption
+/// <summary>
+/// O*NET Interest Profiler answer scale. Values are the points the answer
+/// contributes to its area's score.
+/// </summary>
+public static class RiasecScale
 {
-    public string Key { get; set; } = "";          // "R", "I", "A", "S", "E", "C"
-    public string Label { get; set; } = "";         // e.g. "Realistic"
-    public string Text { get; set; } = "";          // The answer text
+    public const int Min = 0;
+    public const int Max = 4;
+
+    /// <summary>Items per RIASEC area in the 30-item short form.</summary>
+    public const int ItemsPerArea = 5;
+
+    /// <summary>Highest possible score for one area (ItemsPerArea * Max).</summary>
+    public const int MaxAreaScore = ItemsPerArea * Max;
+
+    public static readonly string[] Labels =
+    {
+        "Strongly Dislike",
+        "Dislike",
+        "Unsure",
+        "Like",
+        "Strongly Like"
+    };
+
+    public static string LabelFor(int value) =>
+        value >= Min && value <= Max ? Labels[value] : "";
 }
 
 public class RiasecScores
@@ -400,8 +433,11 @@ public class CareerClarityResult
 
 public class FullAssessmentInput
 {
-    /// <summary>Step 1: RIASEC answers — QuestionId → chosen key ("R","I","A","S","E","C")</summary>
-    public Dictionary<int, string> RiasecAnswers { get; set; } = new();
+    /// <summary>
+    /// Step 1: RIASEC answers — QuestionId → Interest Profiler rating
+    /// (0 = Strongly Dislike … 4 = Strongly Like). See <see cref="RiasecScale"/>.
+    /// </summary>
+    public Dictionary<int, int> RiasecAnswers { get; set; } = new();
 
     /// <summary>Step 2: Career Clarity quiz data</summary>
     public CareerClarityInput CareerClarity { get; set; } = new();

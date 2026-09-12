@@ -39,150 +39,45 @@ public class RiasecService
         "Critical Thinking"
     };
 
-    // ── RIASEC Multiple-Choice Questions ──
+    // ── O*NET Interest Profiler — 30-item short form ──
+    // Items are the public-domain work activities published by the U.S. Department
+    // of Labor's O*NET program (onetinterestprofiler.org). Five items per RIASEC
+    // area; the student rates each on the 5-point RiasecScale. The Area/AreaName
+    // is scoring metadata only — it is never shown while the student is answering,
+    // so the item's interest area cannot bias the answer.
 
     private static readonly List<RiasecQuestion> Questions = new()
     {
-        new()
-        {
-            Id = 1,
-            Scenario = "During a group IT project, which role would you naturally gravitate toward?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Setting up the servers, configuring hardware, and deploying the system" },
-                new() { Key = "I", Label = "Investigative", Text = "Analyzing requirements, designing the system architecture, and solving complex algorithms" },
-                new() { Key = "A", Label = "Artistic", Text = "Designing the user interface, choosing color schemes, and crafting the user experience" },
-                new() { Key = "S", Label = "Social", Text = "Interviewing users to gather requirements and coordinating team communication" },
-                new() { Key = "E", Label = "Enterprising", Text = "Leading the project, assigning tasks, and presenting progress to stakeholders" },
-                new() { Key = "C", Label = "Conventional", Text = "Writing documentation, tracking tasks, and ensuring quality standards are met" }
-            }
-        },
-        new()
-        {
-            Id = 2,
-            Scenario = "You have a free weekend to work on a personal tech project. What excites you most?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Building a home lab with Raspberry Pi, setting up a local network, or assembling a PC" },
-                new() { Key = "I", Label = "Investigative", Text = "Experimenting with a new programming language or exploring a machine learning dataset" },
-                new() { Key = "A", Label = "Artistic", Text = "Designing a portfolio website or creating digital art and animations" },
-                new() { Key = "S", Label = "Social", Text = "Volunteering to teach coding basics to younger students or writing a tech tutorial blog" },
-                new() { Key = "E", Label = "Enterprising", Text = "Planning a startup idea, drafting a business model, or pitching an app concept" },
-                new() { Key = "C", Label = "Conventional", Text = "Organizing your files, setting up automated backups, or building a personal budgeting spreadsheet" }
-            }
-        },
-        new()
-        {
-            Id = 3,
-            Scenario = "You encounter a critical bug in a system just before deployment. What is your instinct?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Roll up my sleeves and debug the server logs, check the network, and fix it hands-on" },
-                new() { Key = "I", Label = "Investigative", Text = "Trace through the code systematically, analyze the root cause, and find the most efficient fix" },
-                new() { Key = "A", Label = "Artistic", Text = "Think of a creative workaround or alternative approach the team hasn't considered" },
-                new() { Key = "S", Label = "Social", Text = "Coordinate with the team, communicate the issue clearly, and help everyone stay calm" },
-                new() { Key = "E", Label = "Enterprising", Text = "Take charge of the situation, decide priorities, and manage the crisis response" },
-                new() { Key = "C", Label = "Conventional", Text = "Document the bug, follow the incident response protocol, and ensure proper testing before re-deploying" }
-            }
-        },
-        new()
-        {
-            Id = 4,
-            Scenario = "Which type of IT course or training would you sign up for first?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Hands-on network administration or Cisco router configuration workshop" },
-                new() { Key = "I", Label = "Investigative", Text = "Advanced algorithms, data science, or cybersecurity analysis course" },
-                new() { Key = "A", Label = "Artistic", Text = "UI/UX design bootcamp or game development with Unity/Unreal" },
-                new() { Key = "S", Label = "Social", Text = "IT service management, user support best practices, or communication skills for tech" },
-                new() { Key = "E", Label = "Enterprising", Text = "IT project management, digital transformation strategy, or tech entrepreneurship seminar" },
-                new() { Key = "C", Label = "Conventional", Text = "Database administration, SQL mastery, or IT audit and compliance training" }
-            }
-        },
-        new()
-        {
-            Id = 5,
-            Scenario = "Imagine your ideal workday five years from now. What does it look like?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "On-site at a data center, configuring servers, and keeping systems running smoothly" },
-                new() { Key = "I", Label = "Investigative", Text = "Deep in code, solving complex problems, and researching new technologies at my desk" },
-                new() { Key = "A", Label = "Artistic", Text = "Designing beautiful interfaces, prototyping new features, and brainstorming creative solutions" },
-                new() { Key = "S", Label = "Social", Text = "Meeting with clients, training teams on new tools, and helping users solve their problems" },
-                new() { Key = "E", Label = "Enterprising", Text = "Leading meetings, making strategic decisions, and steering the direction of IT projects" },
-                new() { Key = "C", Label = "Conventional", Text = "Managing databases, generating reports, and ensuring all systems are well-documented and compliant" }
-            }
-        },
-        new()
-        {
-            Id = 6,
-            Scenario = "A company asks you to improve their IT operations. Where would you focus first?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Upgrade their physical infrastructure — better servers, faster network, proper cabling" },
-                new() { Key = "I", Label = "Investigative", Text = "Analyze their system performance data to find bottlenecks and optimize the architecture" },
-                new() { Key = "A", Label = "Artistic", Text = "Redesign their customer-facing applications for a better user experience" },
-                new() { Key = "S", Label = "Social", Text = "Survey employees about their pain points and improve IT support and training" },
-                new() { Key = "E", Label = "Enterprising", Text = "Propose a digital transformation roadmap and present it to top management" },
-                new() { Key = "C", Label = "Conventional", Text = "Audit their data management, standardize processes, and implement proper documentation" }
-            }
-        },
-        new()
-        {
-            Id = 7,
-            Scenario = "Which achievement would make you most proud?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Successfully deploying and maintaining a reliable, zero-downtime server infrastructure" },
-                new() { Key = "I", Label = "Investigative", Text = "Publishing a research paper or solving a problem no one else could crack" },
-                new() { Key = "A", Label = "Artistic", Text = "Winning a design award or having users praise the look and feel of your app" },
-                new() { Key = "S", Label = "Social", Text = "Receiving heartfelt thanks from a team or client you helped through a tough tech problem" },
-                new() { Key = "E", Label = "Enterprising", Text = "Leading a project to successful launch and being recognized as the driving force behind it" },
-                new() { Key = "C", Label = "Conventional", Text = "Passing a major compliance audit with zero findings due to your thorough documentation" }
-            }
-        },
-        new()
-        {
-            Id = 8,
-            Scenario = "You are assigned to develop a new system from scratch. What part excites you the most?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "Setting up the development environment, CI/CD pipeline, and deployment infrastructure" },
-                new() { Key = "I", Label = "Investigative", Text = "Choosing the right tech stack, designing the database schema, and writing core logic" },
-                new() { Key = "A", Label = "Artistic", Text = "Wireframing the screens, designing the visual identity, and making it look polished" },
-                new() { Key = "S", Label = "Social", Text = "Running user interviews, understanding what people actually need, and doing usability testing" },
-                new() { Key = "E", Label = "Enterprising", Text = "Scoping the project, managing the budget and timeline, and coordinating the team" },
-                new() { Key = "C", Label = "Conventional", Text = "Planning the data models, writing technical specifications, and setting up testing procedures" }
-            }
-        },
-        new()
-        {
-            Id = 9,
-            Scenario = "Which of these IT-related books or topics would you read first?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "\"Network Warrior\" — practical guide to network engineering and troubleshooting" },
-                new() { Key = "I", Label = "Investigative", Text = "\"Cracking the Coding Interview\" — deep dive into algorithms and problem-solving" },
-                new() { Key = "A", Label = "Artistic", Text = "\"Don't Make Me Think\" — principles of intuitive web design and UX" },
-                new() { Key = "S", Label = "Social", Text = "\"The Phoenix Project\" — story about IT teamwork, communication, and DevOps culture" },
-                new() { Key = "E", Label = "Enterprising", Text = "\"The Lean Startup\" — building tech products and making business decisions" },
-                new() { Key = "C", Label = "Conventional", Text = "\"Database Design for Mere Mortals\" — structured approach to data organization" }
-            }
-        },
-        new()
-        {
-            Id = 10,
-            Scenario = "What kind of feedback from a colleague would mean the most to you?",
-            Options = new()
-            {
-                new() { Key = "R", Label = "Realistic", Text = "\"The system you set up is rock-solid — zero issues since deployment\"" },
-                new() { Key = "I", Label = "Investigative", Text = "\"Your solution was brilliant — no one else could have figured that out\"" },
-                new() { Key = "A", Label = "Artistic", Text = "\"The design looks amazing — users love how it feels to use\"" },
-                new() { Key = "S", Label = "Social", Text = "\"You really understood what we needed and made the whole process smooth\"" },
-                new() { Key = "E", Label = "Enterprising", Text = "\"Your leadership kept the project on track — we couldn't have shipped without you\"" },
-                new() { Key = "C", Label = "Conventional", Text = "\"Your documentation is so thorough — it saved us hours during the audit\"" }
-            }
-        }
+        new() { Id = 1, Area = "R", AreaName = "Realistic", Text = "Build kitchen cabinets" },
+        new() { Id = 2, Area = "I", AreaName = "Investigative", Text = "Develop a new medicine" },
+        new() { Id = 3, Area = "A", AreaName = "Artistic", Text = "Write books or plays" },
+        new() { Id = 4, Area = "S", AreaName = "Social", Text = "Help people with personal or emotional problems" },
+        new() { Id = 5, Area = "E", AreaName = "Enterprising", Text = "Manage a department within a large company" },
+        new() { Id = 6, Area = "C", AreaName = "Conventional", Text = "Install software across computers on a large network" },
+        new() { Id = 7, Area = "R", AreaName = "Realistic", Text = "Repair household appliances" },
+        new() { Id = 8, Area = "I", AreaName = "Investigative", Text = "Study ways to reduce water pollution" },
+        new() { Id = 9, Area = "A", AreaName = "Artistic", Text = "Compose or arrange music" },
+        new() { Id = 10, Area = "S", AreaName = "Social", Text = "Give career guidance to people" },
+        new() { Id = 11, Area = "E", AreaName = "Enterprising", Text = "Start your own business" },
+        new() { Id = 12, Area = "C", AreaName = "Conventional", Text = "Operate a calculator" },
+        new() { Id = 13, Area = "R", AreaName = "Realistic", Text = "Assemble electronic parts" },
+        new() { Id = 14, Area = "I", AreaName = "Investigative", Text = "Conduct chemical experiments" },
+        new() { Id = 15, Area = "A", AreaName = "Artistic", Text = "Create special effects for movies" },
+        new() { Id = 16, Area = "S", AreaName = "Social", Text = "Perform rehabilitation therapy" },
+        new() { Id = 17, Area = "E", AreaName = "Enterprising", Text = "Negotiate business contracts" },
+        new() { Id = 18, Area = "C", AreaName = "Conventional", Text = "Keep shipping and receiving records" },
+        new() { Id = 19, Area = "R", AreaName = "Realistic", Text = "Drive a truck to deliver packages to offices and homes" },
+        new() { Id = 20, Area = "I", AreaName = "Investigative", Text = "Examine blood samples using a microscope" },
+        new() { Id = 21, Area = "A", AreaName = "Artistic", Text = "Paint sets for plays" },
+        new() { Id = 22, Area = "S", AreaName = "Social", Text = "Do volunteer work at a non-profit organization" },
+        new() { Id = 23, Area = "E", AreaName = "Enterprising", Text = "Market a new line of clothing" },
+        new() { Id = 24, Area = "C", AreaName = "Conventional", Text = "Inventory supplies using a hand-held computer" },
+        new() { Id = 25, Area = "R", AreaName = "Realistic", Text = "Test the quality of parts before shipment" },
+        new() { Id = 26, Area = "I", AreaName = "Investigative", Text = "Develop a way to better predict the weather" },
+        new() { Id = 27, Area = "A", AreaName = "Artistic", Text = "Write scripts for movies or television shows" },
+        new() { Id = 28, Area = "S", AreaName = "Social", Text = "Teach a high-school class" },
+        new() { Id = 29, Area = "E", AreaName = "Enterprising", Text = "Sell merchandise at a department store" },
+        new() { Id = 30, Area = "C", AreaName = "Conventional", Text = "Stamp, sort, and distribute mail for an organization" },
     };
 
     public RiasecService(OpenAiService openAi, DatasetService dataset)
@@ -223,19 +118,30 @@ public class RiasecService
 
     // ── Step 1: RIASEC Scoring ──
 
-    public RiasecScores ComputeRiasecScores(Dictionary<int, string> answers)
+    /// <summary>
+    /// O*NET Interest Profiler scoring: each answer (0 = Strongly Dislike …
+    /// 4 = Strongly Like) is added to the score of the area its item belongs to.
+    /// With 5 items per area the maximum area score is <see cref="RiasecScale.MaxAreaScore"/>.
+    /// Unknown question ids and out-of-range ratings are ignored.
+    /// </summary>
+    public RiasecScores ComputeRiasecScores(Dictionary<int, int> answers)
     {
         var scores = new RiasecScores();
-        foreach (var answer in answers.Values)
+        var byId = Questions.ToDictionary(q => q.Id, q => q.Area);
+
+        foreach (var (questionId, rating) in answers)
         {
-            switch (answer)
+            if (!byId.TryGetValue(questionId, out var area)) continue;
+            if (rating < RiasecScale.Min || rating > RiasecScale.Max) continue;
+
+            switch (area)
             {
-                case "R": scores.Realistic++; break;
-                case "I": scores.Investigative++; break;
-                case "A": scores.Artistic++; break;
-                case "S": scores.Social++; break;
-                case "E": scores.Enterprising++; break;
-                case "C": scores.Conventional++; break;
+                case "R": scores.Realistic += rating; break;
+                case "I": scores.Investigative += rating; break;
+                case "A": scores.Artistic += rating; break;
+                case "S": scores.Social += rating; break;
+                case "E": scores.Enterprising += rating; break;
+                case "C": scores.Conventional += rating; break;
             }
         }
         return scores;
@@ -468,7 +374,7 @@ Align your narrative with this prediction (see the system message).";
 
         var userPrompt = $@"A CITE student just completed the full Career Path Assessment. Here are their results:
 
-RIASEC Scores (out of 10):
+RIASEC Scores (O*NET Interest Profiler, each out of 20):
 - Realistic: {result.RiasecScores.Realistic}
 - Investigative: {result.RiasecScores.Investigative}
 - Artistic: {result.RiasecScores.Artistic}
