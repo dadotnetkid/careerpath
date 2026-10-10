@@ -12,6 +12,7 @@ public class AppDbContext : IdentityDbContext<IdentityUser>
     public DbSet<TrainingRun> TrainingRuns => Set<TrainingRun>();
     public DbSet<TrainingFold> TrainingFolds => Set<TrainingFold>();
     public DbSet<SavedAssessmentResult> SavedResults => Set<SavedAssessmentResult>();
+    public DbSet<AssessmentRecord> AssessmentRecords => Set<AssessmentRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,9 @@ public class AppDbContext : IdentityDbContext<IdentityUser>
 
         modelBuilder.Entity<SavedAssessmentResult>()
             .HasIndex(s => new { s.UserId, s.CreatedAt });
+
+        modelBuilder.Entity<AssessmentRecord>()
+            .HasIndex(r => r.CreatedAt);
     }
 }
 
@@ -106,4 +110,52 @@ public class SavedAssessmentResult
     public float PredictedConfidence { get; set; }
     public string AiAnalysis { get; set; } = "";
     public string Notes { get; set; } = "";
+}
+
+// One row per completed assessment (every POST /api/riasec/assess), written by
+// the server whether the user is a guest or a signed-in student. This is the
+// admin's "new data" feed: the columns mirror the alumni GTS 3 dataset where
+// the meaning matches (Gwa, Honors, Competencies, CareerClarity,
+// RiasecDominant, Interest) so the export lines up with alumni_gts3.csv.
+// PredictedOutcome and the Suggested* columns are model output, not observed
+// career outcomes, so they must never be fed back in as training labels.
+public class AssessmentRecord
+{
+    public int Id { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    /// <summary>AspNetUsers.Id of a signed-in user; empty for guests.</summary>
+    public string UserId { get; set; } = "";
+
+    /// <summary>"Student", "Admin" or "Guest" — who took the assessment.</summary>
+    public string Respondent { get; set; } = "";
+
+    // Academic profile + competencies
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
+    public string Competencies { get; set; } = "";
+
+    // RIASEC result
+    public string RiasecDominant { get; set; } = "";
+    public string Interest { get; set; } = "";
+    public int RealisticScore { get; set; }
+    public int InvestigativeScore { get; set; }
+    public int ArtisticScore { get; set; }
+    public int SocialScore { get; set; }
+    public int EnterprisingScore { get; set; }
+    public int ConventionalScore { get; set; }
+
+    // Career clarity
+    public string CareerClarity { get; set; } = "";
+    public string ClarityLabel { get; set; } = "";
+    public double ClarityScore { get; set; }
+    public string DesiredRoles { get; set; } = "";
+
+    // Career alignment (binary prediction) + suggested careers
+    public string PredictedOutcome { get; set; } = "";
+    public float PredictionConfidence { get; set; }
+    public string SuggestedCareer { get; set; } = "";
+    public string SuggestedCareerAlignment { get; set; } = "";
+    public string SuggestedFieldOfIndustry { get; set; } = "";
+    public string SuggestedCareers { get; set; } = "";
 }

@@ -1,0 +1,205 @@
+@page "/assessment-records"
+@inject HttpClient Http
+@inject CareerPath.Client.Services.AuthService Auth
+@implements IDisposable
+
+<PageTitle>Assessment Records</PageTitle>
+
+@if (!Auth.IsAdmin)
+{
+    <MudPaper Class="pa-6 mt-6 mx-auto" Elevation="0" Style="max-width:720px; text-align:center; border:1px solid #e0e0e0; border-radius:12px;">
+        <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h5" Class="mt-2 mb-2" Style="font-family:'Source Serif 4',serif;">Researcher Sign-in Required</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">
+            This page contains researcher-facing analytics. Please sign in as an administrator via the button in the upper right.
+        </MudText>
+    </MudPaper>
+}
+else
+{
+<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4" Style="font-family:'Source Serif 4',serif; border-bottom:3px solid #FFD700; padding-bottom:8px;">
+    Assessment Records
+</MudText>
+
+<MudText Typo="Typo.body1" Class="mb-4">
+    Every completed Career Path Assessment is recorded here, from guests and signed-in students alike. The download
+    uses the alumni dataset's column names where they mean the same thing. Career alignment and suggested careers
+    are the system's predictions, not actual career outcomes.
+</MudText>
+
+<div class="d-flex flex-wrap align-center gap-2 mb-4">
+    @if (records != null)
+    {
+        <MudChip T="string" Color="Color.Primary" Size="Size.Medium">
+            Total Records: @records.Total
+        </MudChip>
+    }
+    <MudSpacer />
+    @* Target="_blank" keeps the Blazor router from swallowing the link; the
+       server answers with a CSV attachment so the browser just downloads it. *@
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+               Href="api/assessment-records/export" Target="_blank"
+               Disabled="@(records == null || records.Total == 0)">
+        Download CSV
+    </MudButton>
+</div>
+
+@if (isLoading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+
+@if (loadError != null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@loadError</MudAlert>
+}
+
+@if (records != null)
+{
+    @if (records.Total == 0)
+    {
+        <MudPaper Class="pa-6" Elevation="0" Style="text-align:center; border:1px solid #e0e0e0; border-radius:12px;">
+            <MudText Typo="Typo.body1" Color="Color.Secondary">
+                No assessments have been completed yet. Records appear here as soon as someone finishes the Career Path Assessment.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudTable Items="@records.Items" Hover="true" Striped="true" Bordered="true" Elevation="2" Dense="true">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>Respondent</MudTh>
+                <MudTh>GWA</MudTh>
+                <MudTh>Honors</MudTh>
+                <MudTh>Competencies</MudTh>
+                <MudTh>RIASEC</MudTh>
+                <MudTh>Career Clarity</MudTh>
+                <MudTh>Career Alignment</MudTh>
+                <MudTh>Suggested Career</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd Style="white-space:nowrap;">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+                <MudTd>@context.Respondent</MudTd>
+                <MudTd>@context.Gwa</MudTd>
+                <MudTd>@context.Honors</MudTd>
+                <MudTd>@context.Competencies</MudTd>
+                <MudTd>
+                    <strong>@context.Interest</strong>
+                    <div class="mud-text-secondary" style="font-size:0.8rem;">@context.RiasecDominant</div>
+                </MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                             Color="@GetClarityColor(context.CareerClarity)">
+                        @context.CareerClarity
+                    </MudChip>
+                    <div class="mud-text-secondary" style="font-size:0.8rem;">@context.ClarityScore.ToString("0.#")/25 · @context.ClarityLabel</div>
+                </MudTd>
+                <MudTd>
+                    @if (!string.IsNullOrEmpty(context.PredictedOutcome))
+                    {
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(context.PredictedOutcome == "ICT-Aligned" ? Color.Primary : Color.Info)">
+                            @context.PredictedOutcome
+                        </MudChip>
+                        <div class="mud-text-secondary" style="font-size:0.8rem;">@((context.PredictionConfidence * 100).ToString("F0"))% confidence</div>
+                    }
+                </MudTd>
+                <MudTd>
+                    @context.SuggestedCareer
+                    @if (!string.IsNullOrEmpty(context.SuggestedCareerAlignment))
+                    {
+                        <div class="mud-text-secondary" style="font-size:0.8rem;">@context.SuggestedCareerAlignment</div>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <div class="d-flex justify-space-between align-center pa-4">
+                    <MudText Typo="Typo.body2">
+                        Showing @(((currentPage - 1) * pageSize) + 1)-@(Math.Min(currentPage * pageSize, records.Total)) of @records.Total
+                    </MudText>
+                    <MudPagination Count="@totalPages" Selected="@currentPage" SelectedChanged="PageChanged"
+                                   Color="Color.Primary" Variant="Variant.Outlined" />
+                </div>
+            </PagerContent>
+        </MudTable>
+    }
+}
+} @* end auth gate *@
+
+<style>
+    .gap-2 { gap: 8px; }
+</style>
+
+@code {
+    private PagedResult<AssessmentRecordDto>? records;
+    private bool isLoading = true;
+    private string? loadError;
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalPages => records == null ? 1 : Math.Max(1, (int)Math.Ceiling((double)records.Total / pageSize));
+    private bool _authSubscribed = false;
+
+    public void Dispose()
+    {
+        if (_authSubscribed)
+        {
+            Auth.AuthStateChanged -= OnAuthChanged;
+            _authSubscribed = false;
+        }
+    }
+
+    private void OnAuthChanged() => InvokeAsync(async () =>
+    {
+        if (Auth.IsAdmin && records == null) await FetchPage();
+        StateHasChanged();
+    });
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.RefreshAsync();
+
+        if (!Auth.IsAuthenticated)
+        {
+            if (!_authSubscribed)
+            {
+                Auth.AuthStateChanged += OnAuthChanged;
+                _authSubscribed = true;
+            }
+            isLoading = false;
+            return;
+        }
+
+        await FetchPage();
+    }
+
+    private async Task PageChanged(int page)
+    {
+        currentPage = page;
+        await FetchPage();
+    }
+
+    private async Task FetchPage()
+    {
+        isLoading = true;
+        loadError = null;
+        try
+        {
+            records = await Http.GetFromJsonAsync<PagedResult<AssessmentRecordDto>>(
+                $"api/assessment-records?page={currentPage}&pageSize={pageSize}");
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Could not load assessment records: {ex.Message}";
+        }
+        isLoading = false;
+    }
+
+    private static Color GetClarityColor(string clarity) => clarity switch
+    {
+        "High" => Color.Success,
+        "Medium" => Color.Warning,
+        "Low" => Color.Error,
+        _ => Color.Default
+    };
+}

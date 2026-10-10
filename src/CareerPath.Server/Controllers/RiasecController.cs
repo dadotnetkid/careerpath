@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using CareerPath.Server.Data;
 using CareerPath.Server.Services;
 using CareerPath.Shared;
 
@@ -11,15 +13,24 @@ public class RiasecController : ControllerBase
     private readonly RiasecService _riasecService;
     private readonly PredictionService _predictionService;
     private readonly DatasetService _datasetService;
+    private readonly AppDbContext _db;
+    private readonly UserManager<IdentityUser> _userManager;
+    private readonly ILogger<RiasecController> _logger;
 
     public RiasecController(
         RiasecService riasecService,
         PredictionService predictionService,
-        DatasetService datasetService)
+        DatasetService datasetService,
+        AppDbContext db,
+        UserManager<IdentityUser> userManager,
+        ILogger<RiasecController> logger)
     {
         _riasecService = riasecService;
         _predictionService = predictionService;
         _datasetService = datasetService;
+        _db = db;
+        _userManager = userManager;
+        _logger = logger;
     }
 
     /// <summary>Get the 30 O*NET Interest Profiler work-activity items</summary>
@@ -122,6 +133,58 @@ public class RiasecController : ControllerBase
         // into the prompt so the narrative aligns with the binary classifier.
         result.AiAnalysis = await _riasecService.GenerateAiAnalysis(result, input);
 
+        await RecordAssessment(input, result);
+
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Stores the completed assessment as an <see cref="AssessmentRecord"/> so the
+    /// admin can export it from the Assessment Records page. Best-effort: a DB
+    /// failure is logged but never costs the student their report.
+    /// </summary>
+    private async Task RecordAssessment(FullAssessmentInput input, FullAssessmentResult result)
+    {
+        try
+        {
+            var respondent = User.IsInRole(AuthRoles.Student) ? AuthRoles.Student
+                : User.IsInRole(AuthRoles.Admin) ? AuthRoles.Admin
+                : "Guest";
+            var topMatch = result.MatchedJobs.FirstOrDefault();
+
+            _db.AssessmentRecords.Add(new AssessmentRecord
+            {
+                CreatedAt = DateTime.UtcNow,
+                UserId = _userManager.GetUserId(User) ?? "",
+                Respondent = respondent,
+                Gwa = input.GwaCategory ?? "",
+                Honors = input.Honors ?? "",
+                Competencies = string.Join(", ", input.Skills ?? new List<string>()),
+                RiasecDominant = result.TopDimensions.FirstOrDefault() ?? "",
+                Interest = result.DominantCode,
+                RealisticScore = result.RiasecScores.Realistic,
+                InvestigativeScore = result.RiasecScores.Investigative,
+                ArtisticScore = result.RiasecScores.Artistic,
+                SocialScore = result.RiasecScores.Social,
+                EnterprisingScore = result.RiasecScores.Enterprising,
+                ConventionalScore = result.RiasecScores.Conventional,
+                CareerClarity = result.Clarity.ClarityBucket,
+                ClarityLabel = result.Clarity.ClarityLabel,
+                ClarityScore = result.Clarity.TotalScore,
+                DesiredRoles = string.Join("; ", (input.CareerClarity?.DesiredRoles ?? new List<string>())
+                    .Where(r => !string.IsNullOrWhiteSpace(r))),
+                PredictedOutcome = result.Prediction?.PredictedOutcome ?? "",
+                PredictionConfidence = result.Prediction?.Confidence ?? 0,
+                SuggestedCareer = topMatch?.JobTitle ?? "",
+                SuggestedCareerAlignment = topMatch?.CareerAlignment ?? "",
+                SuggestedFieldOfIndustry = topMatch?.FieldOfIndustry ?? "",
+                SuggestedCareers = string.Join("; ", result.MatchedJobs.Take(5).Select(j => j.JobTitle))
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to record completed assessment.");
+        }
     }
 }

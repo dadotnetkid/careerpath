@@ -104,6 +104,8 @@ CiteTracker/
 | GET | `/api/dataset/summary` | — | `DatasetSummary` with counts and stats |
 | GET | `/api/metrics` | — | `ModelMetrics` (Random Forest only) |
 | GET | `/api/metrics/comparison` | — | `ModelComparison` (RF + DT + LR) |
+| GET | `/api/assessment-records?page=1&pageSize=50` | — | Admin only. Paginated `AssessmentRecordDto[]`, one per completed assessment, newest first |
+| GET | `/api/assessment-records/export` | — | Admin only. Every assessment record as a CSV download (alumni GTS 3 column names where they match) |
 
 ---
 

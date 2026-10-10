@@ -195,6 +195,50 @@ try
         Console.Error.WriteLine($"SavedResults table check failed: {ex.Message}");
     }
 
+    // AssessmentRecords (every completed assessment, exported from the admin
+    // Assessment Records page) is also a post-EnsureCreated addition. Idempotent.
+    try
+    {
+        db.Database.ExecuteSqlRaw(@"
+            IF OBJECT_ID(N'[dbo].[AssessmentRecords]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[AssessmentRecords] (
+                    [Id] INT IDENTITY(1,1) PRIMARY KEY,
+                    [CreatedAt] DATETIME2 NOT NULL,
+                    [UserId] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Respondent] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Gwa] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Honors] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Competencies] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [RiasecDominant] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [Interest] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [RealisticScore] INT NOT NULL DEFAULT 0,
+                    [InvestigativeScore] INT NOT NULL DEFAULT 0,
+                    [ArtisticScore] INT NOT NULL DEFAULT 0,
+                    [SocialScore] INT NOT NULL DEFAULT 0,
+                    [EnterprisingScore] INT NOT NULL DEFAULT 0,
+                    [ConventionalScore] INT NOT NULL DEFAULT 0,
+                    [CareerClarity] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [ClarityLabel] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [ClarityScore] FLOAT NOT NULL DEFAULT 0,
+                    [DesiredRoles] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [PredictedOutcome] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [PredictionConfidence] REAL NOT NULL DEFAULT 0,
+                    [SuggestedCareer] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [SuggestedCareerAlignment] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [SuggestedFieldOfIndustry] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    [SuggestedCareers] NVARCHAR(MAX) NOT NULL DEFAULT ''
+                );
+                CREATE INDEX [IX_AssessmentRecords_CreatedAt] ON [dbo].[AssessmentRecords] ([CreatedAt]);
+            END
+        ");
+        Console.WriteLine("AssessmentRecords table present (created if missing).");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"AssessmentRecords table check failed: {ex.Message}");
+    }
+
     // Seed roles ("Admin", "Student") then the admin user. Both are idempotent
     // so re-runs on each boot are safe. The admin user's password is NOT
     // overwritten if the user already exists — protects manual rotations.

@@ -25,6 +25,7 @@ SUITE_MODULES = [
     "test_riasec_profiler",
     "test_saved_results",
     "test_admin_dataset",
+    "test_assessment_records",
     "test_training",
 ]
 

@@ -55,6 +55,7 @@ python3 tests/e2e/run_all.py --headed --slow-mo 300 --hold 15 --record --full
 | `riasec` | `test_riasec_profiler.py` | The O*NET Interest Profiler bank (30 items, 5 per area, published wording), summed 0-20 scoring, answer validation, the six-items-per-page wizard, and with `--full` the prediction plus the AI narrative and the Results page score bars |
 | `saved-results` | `test_saved_results.py` | A student saves, lists, reads and deletes results; rows stay private to their owner; the My Saved Results page renders them |
 | `dataset` | `test_admin_dataset.py` | Dataset paging, filtering and search; the summary totals; model metrics and the confusion matrix; the Dataset, Insights and Train & Test pages |
+| `assessment-records` | `test_assessment_records.py` | Every completed assessment (guest or student) is recorded with its RIASEC, competency, academic, clarity, alignment and suggested-career results; only admins can list or export them; the CSV export's header, BOM and row count; the Assessment Records page |
 | `training` | `test_training.py` | Cross-validation history and its validation, training status, access control, and with `--train` a real run watched to completion |
 
 ## Notes
@@ -62,6 +63,8 @@ python3 tests/e2e/run_all.py --headed --slow-mo 300 --hold 15 --record --full
 - The suites talk to the real database and the real model. They create student
   accounts with unique `e2e-*@nvsu.edu.ph` addresses (there is no delete-user
   endpoint, so those rows accumulate) and clean up the saved results they write.
+  Every assessment they submit also adds an Assessment Records row; there is no
+  delete endpoint for those either.
 - The admin account comes from `Auth:AdminEmail` / `Auth:AdminPassword`. Override
   with `CAREERPATH_ADMIN_EMAIL` / `CAREERPATH_ADMIN_PASSWORD` when they differ.
 - `POST /api/riasec/assess` always generates the narrative, so each assessment

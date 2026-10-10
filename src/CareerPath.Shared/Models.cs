@@ -656,6 +656,41 @@ public class SaveResultRequest
     public string Notes { get; set; } = "";
 }
 
+// ── Assessment Records (admin-facing "new data" feed) ──
+//
+// The server records every completed assessment (guest or student) and the
+// admin pages through them or downloads them as CSV from /assessment-records.
+// No name or email is included — rows are anonymous research data.
+
+public class AssessmentRecordDto
+{
+    public int Id { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    /// <summary>"Student", "Admin" or "Guest" — who took the assessment.</summary>
+    public string Respondent { get; set; } = "";
+
+    public string Gwa { get; set; } = "";
+    public string Honors { get; set; } = "";
+    public string Competencies { get; set; } = "";
+
+    public string RiasecDominant { get; set; } = "";
+    public string Interest { get; set; } = "";
+    public RiasecScores RiasecScores { get; set; } = new();
+
+    public string CareerClarity { get; set; } = "";
+    public string ClarityLabel { get; set; } = "";
+    public double ClarityScore { get; set; }
+    public string DesiredRoles { get; set; } = "";
+
+    public string PredictedOutcome { get; set; } = "";
+    public float PredictionConfidence { get; set; }
+    public string SuggestedCareer { get; set; } = "";
+    public string SuggestedCareerAlignment { get; set; } = "";
+    public string SuggestedFieldOfIndustry { get; set; } = "";
+    public string SuggestedCareers { get; set; } = "";
+}
+
 public class SavedResultDto
 {
     public int Id { get; set; }
